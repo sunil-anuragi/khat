@@ -7,6 +7,7 @@ class MessageChat {
   final String timestamp;
   final String content;
   final int type;
+  // final bool istyping;
 
   const MessageChat({
     required this.idFrom,
@@ -14,6 +15,7 @@ class MessageChat {
     required this.timestamp,
     required this.content,
     required this.type,
+    // required this.istyping,
   });
 
   Map<String, dynamic> toJson() {
@@ -23,6 +25,7 @@ class MessageChat {
       FirestoreConstants.timestamp: this.timestamp,
       FirestoreConstants.content: this.content,
       FirestoreConstants.type: this.type,
+      // FirestoreConstants.istyping: this.istyping,
     };
   }
 
@@ -32,6 +35,14 @@ class MessageChat {
     String timestamp = doc.get(FirestoreConstants.timestamp);
     String content = doc.get(FirestoreConstants.content);
     int type = doc.get(FirestoreConstants.type);
-    return MessageChat(idFrom: idFrom, idTo: idTo, timestamp: timestamp, content: content, type: type);
+    // bool istyping = doc.get(FirestoreConstants.istyping);
+    return MessageChat(
+      idFrom: idFrom,
+      idTo: idTo,
+      timestamp: timestamp,
+      content: content,
+      type: type,
+      // istyping: istyping
+    );
   }
 }
