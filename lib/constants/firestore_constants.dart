@@ -12,4 +12,6 @@ class FirestoreConstants {
   static const content = "content";
   static const type = "type";
   static const istyping = "istyping";
+  static const whotyping = "whotyping";
+  static const isonline = "isonline";
 }

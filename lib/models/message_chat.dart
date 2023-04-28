@@ -7,7 +7,9 @@ class MessageChat {
   final String timestamp;
   final String content;
   final int type;
-  // final bool istyping;
+  final bool istyping;
+  final bool isonline;
+  final String whotyping;
 
   const MessageChat({
     required this.idFrom,
@@ -15,7 +17,9 @@ class MessageChat {
     required this.timestamp,
     required this.content,
     required this.type,
-    // required this.istyping,
+    required this.istyping,
+    required this.whotyping,
+    required this.isonline,
   });
 
   Map<String, dynamic> toJson() {
@@ -25,7 +29,9 @@ class MessageChat {
       FirestoreConstants.timestamp: this.timestamp,
       FirestoreConstants.content: this.content,
       FirestoreConstants.type: this.type,
-      // FirestoreConstants.istyping: this.istyping,
+      FirestoreConstants.istyping: this.istyping,
+      FirestoreConstants.whotyping: this.whotyping,
+      FirestoreConstants.isonline: this.isonline,
     };
   }
 
@@ -34,15 +40,18 @@ class MessageChat {
     String idTo = doc.get(FirestoreConstants.idTo);
     String timestamp = doc.get(FirestoreConstants.timestamp);
     String content = doc.get(FirestoreConstants.content);
+    String whotyping = doc.get(FirestoreConstants.whotyping);
     int type = doc.get(FirestoreConstants.type);
-    // bool istyping = doc.get(FirestoreConstants.istyping);
+    bool istyping = doc.get(FirestoreConstants.istyping);
+    bool isonline = doc.get(FirestoreConstants.isonline);
     return MessageChat(
-      idFrom: idFrom,
-      idTo: idTo,
-      timestamp: timestamp,
-      content: content,
-      type: type,
-      // istyping: istyping
-    );
+        idFrom: idFrom,
+        idTo: idTo,
+        timestamp: timestamp,
+        content: content,
+        type: type,
+        istyping: istyping,
+        whotyping: whotyping,
+        isonline: isonline);
   }
 }

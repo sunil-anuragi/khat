@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -34,6 +35,22 @@ class ChatProvider {
         .update(dataNeedUpdate);
   }
 
+  updateDataFirestoreallfiled(String collectionPath, groupChatId,
+      Map<String, dynamic> dataNeedUpdate) async {
+    await firebaseFirestore
+        .collection(collectionPath)
+        .doc(groupChatId)
+        .collection(groupChatId)
+        .get()
+        .then((QuerySnapshot snapshot) {
+      snapshot.docs.forEach((element) {
+        print(element.id);
+        element.reference.update(dataNeedUpdate);
+      });
+      print(snapshot.docs.length.toString());
+    });
+  }
+
   Stream<QuerySnapshot> getChatStream(String groupChatId, int limit) {
     return firebaseFirestore
         .collection(FirestoreConstants.pathMessageCollection)
@@ -45,7 +62,7 @@ class ChatProvider {
   }
 
   void sendMessage(String content, int type, String groupChatId,
-      String currentUserId, String peerId) {
+      String currentUserId, String peerId, whotyping, isonline) {
     DocumentReference documentReference = firebaseFirestore
         .collection(FirestoreConstants.pathMessageCollection)
         .doc(groupChatId)
@@ -58,7 +75,9 @@ class ChatProvider {
       timestamp: DateTime.now().millisecondsSinceEpoch.toString(),
       content: content,
       type: type,
-      // istyping: false,
+      istyping: false,
+      whotyping: whotyping,
+      isonline: isonline,
     );
 
     FirebaseFirestore.instance.runTransaction((transaction) async {
