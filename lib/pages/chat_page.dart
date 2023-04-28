@@ -515,28 +515,17 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                         this.widget.arguments.peerNickname,
                         style: TextStyle(color: ColorConstants.primaryColor),
                       ),
-                      Obx(
-                        () => _chatctrl.whoistyping.value !=
-                                currentUserId.toString()
-                            ? _chatctrl.isonline.value
-                                ? Text(
-                                    "online",
-                                    style: TextStyle(
-                                        fontSize: 15,
-                                        color: ColorConstants.green),
-                                  )
-                                : Text(
-                                    "offline",
-                                    style: TextStyle(
-                                        fontSize: 15,
-                                        color: ColorConstants.red),
-                                  )
-                            : Text(
-                                "offline",
-                                style: TextStyle(
-                                    fontSize: 15, color: ColorConstants.red),
-                              ),
-                      ),
+                      Obx(() => _chatctrl.isonline.value
+                          ? Text(
+                              "online",
+                              style: TextStyle(
+                                  fontSize: 15, color: ColorConstants.green),
+                            )
+                          : Text(
+                              "offline",
+                              style: TextStyle(
+                                  fontSize: 15, color: ColorConstants.red),
+                            )),
                     ],
                   );
                 } else {
