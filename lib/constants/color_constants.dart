@@ -21,4 +21,6 @@ class ColorConstants {
   static const greyColor2 = Color(0xffE8E8E8);
   static const green = Colors.green;
   static const red = Colors.red;
+  static const white = Colors.white;
+  static const blackgrey = Color.fromARGB(255, 39, 39, 39);
 }

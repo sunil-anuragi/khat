@@ -62,7 +62,7 @@ class ChatProvider {
   }
 
   void sendMessage(String content, int type, String groupChatId,
-      String currentUserId, String peerId, whotyping, isonline) {
+      String currentUserId, String peerId, whotyping, isonline, status) {
     DocumentReference documentReference = firebaseFirestore
         .collection(FirestoreConstants.pathMessageCollection)
         .doc(groupChatId)
@@ -78,6 +78,7 @@ class ChatProvider {
       istyping: false,
       whotyping: whotyping,
       isonline: isonline,
+      status: status,
     );
 
     FirebaseFirestore.instance.runTransaction((transaction) async {
@@ -87,6 +88,7 @@ class ChatProvider {
       );
     });
   }
+  
 }
 
 class TypeMessage {

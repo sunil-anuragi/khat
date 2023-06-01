@@ -3,6 +3,7 @@ class FirestoreConstants {
   static const pathMessageCollection = "messages";
   static const nickname = "nickname";
   static const aboutMe = "aboutMe";
+  static const token = "token";
   static const photoUrl = "photoUrl";
   static const id = "id";
   static const chattingWith = "chattingWith";
@@ -14,4 +15,5 @@ class FirestoreConstants {
   static const istyping = "istyping";
   static const whotyping = "whotyping";
   static const isonline = "isonline";
+  static const status = "status";
 }

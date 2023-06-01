@@ -9,6 +9,7 @@ class MessageChat {
   final int type;
   final bool istyping;
   final bool isonline;
+  final bool status;
   final String whotyping;
 
   const MessageChat({
@@ -20,6 +21,7 @@ class MessageChat {
     required this.istyping,
     required this.whotyping,
     required this.isonline,
+    required this.status,
   });
 
   Map<String, dynamic> toJson() {
@@ -32,6 +34,7 @@ class MessageChat {
       FirestoreConstants.istyping: this.istyping,
       FirestoreConstants.whotyping: this.whotyping,
       FirestoreConstants.isonline: this.isonline,
+      FirestoreConstants.status: this.status,
     };
   }
 
@@ -44,6 +47,7 @@ class MessageChat {
     int type = doc.get(FirestoreConstants.type);
     bool istyping = doc.get(FirestoreConstants.istyping);
     bool isonline = doc.get(FirestoreConstants.isonline);
+    bool status = doc.get(FirestoreConstants.status);
     return MessageChat(
         idFrom: idFrom,
         idTo: idTo,
@@ -52,6 +56,7 @@ class MessageChat {
         type: type,
         istyping: istyping,
         whotyping: whotyping,
-        isonline: isonline);
+        isonline: isonline,
+        status: status);
   }
 }

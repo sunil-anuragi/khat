@@ -169,7 +169,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     if (content.trim().isNotEmpty) {
       textEditingController.clear();
       chatProvider.sendMessage(content, type, groupChatId, currentUserId,
-          widget.arguments.peerId, currentUserId, true);
+          widget.arguments.peerId, currentUserId, true, false);
       if (listScrollController.hasClients) {
         listScrollController.animateTo(0,
             duration: Duration(milliseconds: 300), curve: Curves.easeOut);
@@ -190,15 +190,53 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             messageChat.type == TypeMessage.text
                 // Text
                 ? Container(
-                    child: Text(
-                      messageChat.content,
-                      style: TextStyle(color: ColorConstants.primaryColor),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Wrap(
+                            children: [
+                              Text(
+                                messageChat.content,
+                                style: TextStyle(
+                                    color: ColorConstants.primaryColor),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 10),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      DateFormat('hh:mm a').format(
+                                          DateTime.fromMillisecondsSinceEpoch(
+                                              int.parse(
+                                                  messageChat.timestamp))),
+                                      style: TextStyle(
+                                          color: ColorConstants.blackgrey,
+                                          fontSize: 12,
+                                          fontStyle: FontStyle.italic),
+                                    ),
+                                    SizedBox(width: 10),
+                                    messageChat.status == true
+                                        ? Icon(
+                                            Icons.visibility,
+                                            size: 15,
+                                          )
+                                        : Icon(Icons.visibility_off, size: 15)
+                                  ],
+                                ),
+                              )
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                     padding: EdgeInsets.fromLTRB(15, 10, 15, 10),
                     width: 200,
                     decoration: BoxDecoration(
                         color: ColorConstants.greyColor2,
-                        borderRadius: BorderRadius.circular(8)),
+                        borderRadius: BorderRadius.circular(10)),
                     margin: EdgeInsets.only(
                         bottom: isLastMessageRight(index) ? 20 : 10, right: 10),
                   )
@@ -335,9 +373,23 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                       : Container(width: 35),
                   messageChat.type == TypeMessage.text
                       ? Container(
-                          child: Text(
-                            messageChat.content,
-                            style: TextStyle(color: Colors.white),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                messageChat.content,
+                                style: TextStyle(color: Colors.white),
+                              ),
+                              Text(
+                                DateFormat('hh:mm a').format(
+                                    DateTime.fromMillisecondsSinceEpoch(
+                                        int.parse(messageChat.timestamp))),
+                                style: TextStyle(
+                                    color: ColorConstants.white,
+                                    fontSize: 12,
+                                    fontStyle: FontStyle.italic),
+                              ),
+                            ],
                           ),
                           padding: EdgeInsets.fromLTRB(15, 10, 15, 10),
                           width: 200,
@@ -433,20 +485,20 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               ),
 
               // Time
-              isLastMessageLeft(index)
-                  ? Container(
-                      child: Text(
-                        DateFormat('dd MMM kk:mm').format(
-                            DateTime.fromMillisecondsSinceEpoch(
-                                int.parse(messageChat.timestamp))),
-                        style: TextStyle(
-                            color: ColorConstants.greyColor,
-                            fontSize: 12,
-                            fontStyle: FontStyle.italic),
-                      ),
-                      margin: EdgeInsets.only(left: 50, top: 5, bottom: 5),
-                    )
-                  : SizedBox.shrink()
+              // isLastMessageLeft(index)
+              //     ? Container(
+              //         child: Text(
+              //           DateFormat('dd MMM kk:mm').format(
+              //               DateTime.fromMillisecondsSinceEpoch(
+              //                   int.parse(messageChat.timestamp))),
+              //           style: TextStyle(
+              //               color: ColorConstants.greyColor,
+              //               fontSize: 12,
+              //               fontStyle: FontStyle.italic),
+              //         ),
+              //         margin: EdgeInsets.only(left: 50, top: 5, bottom: 5),
+              //       )
+              //     : SizedBox.shrink()
             ],
             crossAxisAlignment: CrossAxisAlignment.start,
           ),
@@ -501,6 +553,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: StreamBuilder<QuerySnapshot>(
             stream: chatProvider.getChatStream(groupChatId, _limit),
             builder:
@@ -508,36 +561,54 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               if (snapshot.hasData) {
                 listMessage = snapshot.data!.docs;
                 if (listMessage.length > 0) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        this.widget.arguments.peerNickname,
-                        style: TextStyle(color: ColorConstants.primaryColor),
-                      ),
-                      Obx(() => _chatctrl.isonline.value
-                          ? Text(
-                              "online",
-                              style: TextStyle(
-                                  fontSize: 15, color: ColorConstants.green),
-                            )
-                          : Text(
-                              "offline",
-                              style: TextStyle(
-                                  fontSize: 15, color: ColorConstants.red),
-                            )),
-                    ],
+                  return Container(
+                    alignment: Alignment.centerLeft,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          this.widget.arguments.peerNickname,
+                          style: TextStyle(
+                            color: ColorConstants.primaryColor,
+                            fontSize: 15,
+                          ),
+                        ),
+                        Obx(() => _chatctrl.isonline.value
+                            ? Text(
+                                "online",
+                                style: TextStyle(
+                                    fontSize: 10, color: ColorConstants.green),
+                              )
+                            : Text(
+                                "offline",
+                                style: TextStyle(
+                                    fontSize: 10, color: ColorConstants.red),
+                              )),
+                      ],
+                    ),
                   );
                 } else {
-                  return Text(
-                    this.widget.arguments.peerNickname,
-                    style: TextStyle(color: ColorConstants.primaryColor),
+                  return Container(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      this.widget.arguments.peerNickname,
+                      style: TextStyle(
+                        color: ColorConstants.primaryColor,
+                        fontSize: 15,
+                      ),
+                    ),
                   );
                 }
               } else {
-                return Text(
-                  this.widget.arguments.peerNickname,
-                  style: TextStyle(color: ColorConstants.primaryColor),
+                return Container(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    this.widget.arguments.peerNickname,
+                    style: TextStyle(
+                      color: ColorConstants.primaryColor,
+                      fontSize: 15,
+                    ),
+                  ),
                 );
               }
             }),
@@ -695,48 +766,55 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       child: Row(
         children: <Widget>[
           // Button send image
-          Material(
-            child: Container(
-              margin: EdgeInsets.symmetric(horizontal: 1),
-              child: IconButton(
-                icon: Icon(Icons.image),
-                onPressed: getImage,
-                color: ColorConstants.primaryColor,
-              ),
-            ),
-            color: Colors.white,
-          ),
-          Material(
-            child: Container(
-              margin: EdgeInsets.symmetric(horizontal: 1),
-              child: IconButton(
-                icon: Icon(Icons.face),
-                onPressed: getSticker,
-                color: ColorConstants.primaryColor,
-              ),
-            ),
-            color: Colors.white,
-          ),
+          // Material(
+          //   child: Container(
+          //     margin: EdgeInsets.symmetric(horizontal: 1),
+          //     child: IconButton(
+          //       icon: Icon(Icons.image),
+          //       onPressed: getImage,
+          //       color: ColorConstants.primaryColor,
+          //     ),
+          //   ),
+          //   color: Colors.white,
+          // ),
+          // Material(
+          //   child: Container(
+          //     margin: EdgeInsets.symmetric(horizontal: 1),
+          //     child: IconButton(
+          //       icon: Icon(Icons.face),
+          //       onPressed: getSticker,
+          //       color: ColorConstants.primaryColor,
+          //     ),
+          //   ),
+          //   color: Colors.white,
+          // ),
 
           // Edit text
-          Flexible(
-            child: Container(
-              child: TextField(
-                onSubmitted: (value) {
-                  onSendMessage(textEditingController.text, TypeMessage.text);
-                },
-                style:
-                    TextStyle(color: ColorConstants.primaryColor, fontSize: 15),
-                controller: textEditingController,
-                onChanged: (_) {
-                  checkistyping();
-                },
-                decoration: InputDecoration.collapsed(
-                  hintText: 'Type your message...',
-                  hintStyle: TextStyle(color: ColorConstants.greyColor),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Container(
+                constraints: BoxConstraints(maxHeight: 500),
+                padding: EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                child: TextField(
+                  onSubmitted: (value) {
+                    onSendMessage(textEditingController.text, TypeMessage.text);
+                  },
+                  style: TextStyle(
+                      color: ColorConstants.primaryColor, fontSize: 15),
+                  controller: textEditingController,
+                  textInputAction: TextInputAction.newline,
+                  onChanged: (_) {
+                    checkistyping();
+                  },
+                  maxLines: null,
+                  keyboardType: TextInputType.multiline,
+                  decoration: InputDecoration.collapsed(
+                    hintText: 'Type your message...',
+                    hintStyle: TextStyle(color: ColorConstants.greyColor),
+                  ),
+                  focusNode: focusNode,
+                  autofocus: true,
                 ),
-                focusNode: focusNode,
-                autofocus: true,
               ),
             ),
           ),
@@ -802,7 +880,14 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                         snapshot.data?.docs.first['istyping'];
                     _chatctrl.isonline.value =
                         snapshot.data?.docs.first['isonline'];
-
+                    _chatctrl.status.value =
+                        snapshot.data?.docs.first['status'];
+                    if (_chatctrl.whoistyping.value != currentUserId)
+                      chatProvider.updateDataFirestoreallfiled(
+                          FirestoreConstants.pathMessageCollection,
+                          groupChatId, {
+                        FirestoreConstants.status: true,
+                      });
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
