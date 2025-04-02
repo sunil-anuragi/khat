@@ -12,7 +12,6 @@ class ChatController extends GetxController with WidgetsBindingObserver {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final SharedPreferences _prefs = Get.find<SharedPreferences>();
-
   final RxBool isLoading = false.obs;
   final RxBool isShowSticker = false.obs;
   final RxBool isTyping = false.obs;
@@ -34,18 +33,22 @@ class ChatController extends GetxController with WidgetsBindingObserver {
   final RxBool isOffline = false.obs;
   final RxList<Map<String, dynamic>> pendingMessages =
       <Map<String, dynamic>>[].obs;
+  var messageStream =
+      Rx<Stream<QuerySnapshot<Map<String, dynamic>>>>(Stream.empty());
 
   @override
   void onInit() {
     WidgetsBinding.instance.addObserver(this);
     readLocal();
     enableOfflinePersistence();
+
     super.onInit();
   }
 
   @override
   void onClose() {
     WidgetsBinding.instance.removeObserver(this);
+
     super.onClose();
   }
 
@@ -260,7 +263,7 @@ class ChatController extends GetxController with WidgetsBindingObserver {
 
     if (content.trim().isNotEmpty) {
       try {
-        // Check if receiver is online
+        // Check if receiver is online and in chat screen
         final chatDoc = await _firestore
             .collection(FirestoreConstants.pathMessageCollection)
             .doc(groupChatId.value)
@@ -270,6 +273,16 @@ class ChatController extends GetxController with WidgetsBindingObserver {
             chatDoc.data()?['onlineStatus'] as Map<String, dynamic>?;
         final isReceiverOnline =
             onlineStatus != null && onlineStatus[peerId.value] == true;
+
+        // Check if receiver is in chat screen
+        final userDoc = await _firestore
+            .collection(FirestoreConstants.pathUserCollection)
+            .doc(peerId.value)
+            .get();
+
+        final isReceiverInChat =
+            userDoc.data()?[FirestoreConstants.chattingWith] ==
+                currentUserId.value;
 
         final message = MessageChat(
           idFrom: currentUserId.value,
@@ -312,7 +325,11 @@ class ChatController extends GetxController with WidgetsBindingObserver {
               'lastMessageRead': isReceiverOnline,
             },
           );
-          sendNotificationToUser(content);
+          print("dssadsd"+ isReceiverInChat.toString());
+          // Only send notification if receiver is not in chat screen
+          if (!isReceiverInChat) {
+            sendNotificationToUser(content);
+          }
         }
       } catch (e) {
         print('Error sending message: $e');
@@ -404,21 +421,35 @@ class ChatController extends GetxController with WidgetsBindingObserver {
 
   // ************* continues update read satatus *********//
 
-  // void listenForUnreadMessages() {
-  //    if (!isScreenOpen.value) return;
-  //   messageStream = _firestore
+  // Future<void> listenForUnreadMessages() async {
+  //   // Check if receiver is in chat screen
+  //   final userDoc = await _firestore
+  //           .collection(FirestoreConstants.pathUserCollection)
+  //           .doc(peerId.value)
+  //           .get();
+
+  //       final isReceiverInChat =
+  //           userDoc.data()?[FirestoreConstants.chattingWith] ==
+  //               currentUserId.value;
+      
+
+  //   messageStream.value = _firestore
   //       .collection(FirestoreConstants.pathMessageCollection)
   //       .doc(groupChatId.value)
   //       .collection(groupChatId.value)
   //       .where('idTo', isEqualTo: currentUserId.value)
   //       .where('isRead', isEqualTo: false)
   //       .snapshots();
-  //   messageStream!.listen((snapshot) {
-  //       if (!isScreenOpen.value) return;
+
+  //   messageStream.value.listen((snapshot) {
+  //     print("saddsdsada16542516216356");
+  //       print("reveivecr chat"+ isReceiverInChat.toString());
+  //     // if (!isScreenOpen.value) return;
   //     for (var doc in snapshot.docs) {
-  //       doc.reference
-  //           .update({'isRead': true});
-  //         } // Mark each unread message as read
+  //       if (isReceiverInChat) {
+  //         doc.reference.update({'isRead': true});
+  //       }
+  //     }
   //   });
   // }
 

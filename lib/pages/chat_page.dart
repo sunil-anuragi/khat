@@ -7,7 +7,6 @@ import 'package:flutter_chat_demo/controllers/chat_controller.dart';
 import 'package:flutter_chat_demo/models/models.dart';
 import 'package:flutter_chat_demo/widgets/widgets.dart';
 import 'package:get/get.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../service/firebase_service.dart';
 import 'pages.dart';
@@ -29,6 +28,8 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   List<QueryDocumentSnapshot> listMessage = [];
   int _limit = 20;
   int _limitIncrement = 20;
+  final RxBool showNewMessageButton = false.obs;
+  int lastMessageCount = 0;
 
   @override
   void initState() {
@@ -43,9 +44,9 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     );
     // Mark messages as read when entering chat
     _chatController.markMessagesAsRead();
-   
+  //  _chatController.listenForUnreadMessages();
   }
-
+ 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -67,8 +68,18 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     }
   }
 
-  _scrollListener() {
+  void _scrollListener() {
     if (!listScrollController.hasClients) return;
+    
+    // Check if we're near the bottom
+    final isNearBottom = listScrollController.position.pixels >=
+        listScrollController.position.maxScrollExtent - 100;
+    
+    // If we're near bottom, hide the new message button
+    if (isNearBottom) {
+      showNewMessageButton.value = false;
+    }
+
     if (listScrollController.offset >=
             listScrollController.position.maxScrollExtent &&
         !listScrollController.position.outOfRange &&
@@ -76,6 +87,17 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       setState(() {
         _limit += _limitIncrement;
       });
+    }
+  }
+
+  void scrollToBottom() {
+    if (listScrollController.hasClients) {
+      listScrollController.animateTo(
+        0,
+        duration: Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+      );
+      showNewMessageButton.value = false;
     }
   }
 
@@ -816,6 +838,15 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   AsyncSnapshot<QuerySnapshot> snapshot) {
                 if (snapshot.hasData) {
                   listMessage = snapshot.data!.docs;
+                  
+                  // Check for new messages
+                  if (listMessage.length > lastMessageCount && 
+                      listScrollController.hasClients &&
+                      listScrollController.position.pixels > 100) {
+                    showNewMessageButton.value = true;
+                  }
+                  lastMessageCount = listMessage.length;
+
                   if (listMessage.length > 0) {
                     _chatController.isOnline.value =
                         snapshot.data?.docs.first['isonline'];
@@ -829,52 +860,84 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                         'status': true,
                       });
                     }
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    return Stack(
                       children: [
-                        Expanded(
-                          child: ListView.builder(
-                            shrinkWrap: true,
-                            padding: EdgeInsets.all(10),
-                            itemBuilder: (context, index) =>
-                                buildItem(index, snapshot.data?.docs[index]),
-                            itemCount: snapshot.data?.docs.length,
-                            reverse: true,
-                            controller: listScrollController,
-                          ),
-                        ),
-                        Obx(() {
-                          final typingUsers = _chatController.typingStatus.entries
-                              .where((entry) => entry.value)
-                              .map((entry) => entry.key)
-                              .toList();
-                          
-                          // Only show typing status for other users, not the current user
-                          final otherTypingUsers = typingUsers
-                              .where((userId) => userId != _chatController.currentUserId.value)
-                              .toList();
-                          
-                          if (otherTypingUsers.isEmpty) return Container();
-                          
-                          final typingText = otherTypingUsers
-                              .map((userId) => userId == _chatController.peerId.value 
-                                  ? widget.arguments.peerNickname 
-                                  : 'Someone')
-                              .join(', ');
-                          
-                          return Container(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 10),
-                            child: Text(
-                              "$typingText ${otherTypingUsers.length == 1 ? 'is' : 'are'} typing...",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: ColorConstants.greyColor,
-                                fontStyle: FontStyle.italic,
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: ListView.builder(
+                                shrinkWrap: true,
+                                padding: EdgeInsets.all(10),
+                                itemBuilder: (context, index) =>
+                                    buildItem(index, snapshot.data?.docs[index]),
+                                itemCount: snapshot.data?.docs.length,
+                                reverse: true,
+                                controller: listScrollController,
                               ),
                             ),
-                          );
-                        }),
+                            Obx(() {
+                              final typingUsers = _chatController.typingStatus.entries
+                                  .where((entry) => entry.value)
+                                  .map((entry) => entry.key)
+                                  .toList();
+                              
+                              final otherTypingUsers = typingUsers
+                                  .where((userId) => userId != _chatController.currentUserId.value)
+                                  .toList();
+                              
+                              if (otherTypingUsers.isEmpty) return Container();
+                              
+                              final typingText = otherTypingUsers
+                                  .map((userId) => userId == _chatController.peerId.value 
+                                      ? widget.arguments.peerNickname 
+                                      : 'Someone')
+                                  .join(', ');
+                              
+                              return Container(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 20, vertical: 10),
+                                child: Text(
+                                  "$typingText ${otherTypingUsers.length == 1 ? 'is' : 'are'} typing...",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: ColorConstants.greyColor,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                        // New Message Button with Animation
+                        Obx(() => AnimatedPositioned(
+                              duration: Duration(milliseconds: 300),
+                              curve: Curves.easeInOut,
+                              right: showNewMessageButton.value ? 100 : -200,
+                              left: showNewMessageButton.value ? 100 : -200,
+                              bottom: showNewMessageButton.value ? 80 : -100,
+                              child: AnimatedOpacity(
+                                duration: Duration(milliseconds: 300),
+                                opacity: showNewMessageButton.value ? 1.0 : 0.0,
+                                child: ElevatedButton.icon(
+                                  onPressed: scrollToBottom,
+                                  icon: Icon(Icons.arrow_downward),
+                                  label: Text('New Message'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: ColorConstants.green,
+                                    foregroundColor: Colors.white,
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    elevation: 4,
+                                  ),
+                                ),
+                              ),
+                            )),
                       ],
                     );
                   } else {
