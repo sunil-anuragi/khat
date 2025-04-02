@@ -24,6 +24,8 @@ dependencies:
   firebase_messaging: ^14.4.1
   permission_handler: 
   dio:
+  googleapis_auth:
+  googleapis:
 dev_dependencies:
   flutter_test:
     sdk: flutter

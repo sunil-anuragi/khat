@@ -9,6 +9,7 @@ import 'package:flutter_chat_demo/widgets/widgets.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import '../service/firebase_service.dart';
 import 'pages.dart';
 
 class ChatPage extends StatefulWidget {
@@ -25,9 +26,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   final TextEditingController textEditingController = TextEditingController();
   final ScrollController listScrollController = ScrollController();
   final FocusNode focusNode = FocusNode();
-
   List<QueryDocumentSnapshot> listMessage = [];
-  
   int _limit = 20;
   int _limitIncrement = 20;
 
@@ -44,13 +43,14 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     );
     // Mark messages as read when entering chat
     _chatController.markMessagesAsRead();
+   
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       Future.delayed(const Duration(milliseconds: 500), () {
-        _chatController.updateDataFirestoreAllField(
+        FirebaseService().updateDataFirestoreAllField(
           FirestoreConstants.pathMessageCollection,
           _chatController.groupChatId.value,
           {'isonline': true},
@@ -58,7 +58,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       });
     } else {
       Future.delayed(const Duration(milliseconds: 500), () {
-        _chatController.updateDataFirestoreAllField(
+        FirebaseService().updateDataFirestoreAllField(
           FirestoreConstants.pathMessageCollection,
           _chatController.groupChatId.value,
           {'isonline': false},
@@ -85,23 +85,23 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     }
   }
 
-  Future getImage() async {
-    ImagePicker imagePicker = ImagePicker();
-    XFile? pickedFile = await imagePicker.pickImage(source: ImageSource.gallery).catchError((err) {
-      Get.snackbar(
-        'Error',
-        err.toString(),
-        snackPosition: SnackPosition.BOTTOM,
-      );
-      return null;
-    });
-    if (pickedFile != null) {
-      _chatController.imageFile.value = File(pickedFile.path);
-      if (_chatController.imageFile.value != null) {
-        await _chatController.uploadFile(_chatController.imageFile.value!);
-      }
-    }
-  }
+  // Future getImage() async {
+  //   ImagePicker imagePicker = ImagePicker();
+  //   XFile? pickedFile = await imagePicker.pickImage(source: ImageSource.gallery).catchError((err) {
+  //     Get.snackbar(
+  //       'Error',
+  //       err.toString(),
+  //       snackPosition: SnackPosition.BOTTOM,
+  //     );
+  //     return null;
+  //   });
+  //   if (pickedFile != null) {
+  //     _chatController.imageFile.value = File(pickedFile.path);
+  //     if (_chatController.imageFile.value != null) {
+  //       await _chatController.uploadFile(_chatController.imageFile.value!);
+  //     }
+  //   }
+  // }
 
   void getSticker() {
     focusNode.unfocus();
@@ -317,6 +317,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                               color: ColorConstants.primaryColor,
                               fontSize: 16,
                             ),
+                            
                           ),
                           SizedBox(height: 4),
                           Text(
@@ -473,34 +474,35 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                           widget.arguments.peerNickname,
                           style: TextStyle(
                             color: ColorConstants.primaryColor,
-                            fontSize: 15,
+                            fontSize: 18,
                           ),
                         ),
-                        Obx(() => FutureBuilder<bool>(
-                          future: _chatController.areBothUsersOnline(),
-                          builder: (context, snapshot) {
-                            if (snapshot.hasData && snapshot.data == true) {
-                              return Text(
-                                "Both Online",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: ColorConstants.green,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              );
-                            } else {
-                              return Text(
-                                _chatController.isOnline.value ? "Online" : "Offline",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: _chatController.isOnline.value 
-                                      ? ColorConstants.green 
-                                      : ColorConstants.red,
-                                ),
-                              );
-                            }
-                          },
-                        )),
+
+                        // Obx(() => FutureBuilder<bool>(
+                        //   future: _chatController.areBothUsersOnline(),
+                        //   builder: (context, snapshot) {
+                        //     if (snapshot.hasData && snapshot.data == true) {
+                        //       return Text(
+                        //         "Both Online",
+                        //         style: TextStyle(
+                        //           fontSize: 12,
+                        //           color: ColorConstants.green,
+                        //           fontWeight: FontWeight.bold,
+                        //         ),
+                        //       );
+                        //     } else {
+                        //       return Text(
+                        //         _chatController.isOnline.value ? "Online" : "Offline",
+                        //         style: TextStyle(
+                        //           fontSize: 12,
+                        //           color: _chatController.isOnline.value 
+                        //               ? ColorConstants.green 
+                        //               : ColorConstants.red,
+                        //         ),
+                        //       );
+                        //     }
+                        //   },
+                        // )),
                       ],
                     ),
                   );
@@ -514,34 +516,34 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                           widget.arguments.peerNickname,
                           style: TextStyle(
                             color: ColorConstants.primaryColor,
-                            fontSize: 15,
+                            fontSize: 18,
                           ),
                         ),
-                        Obx(() => FutureBuilder<bool>(
-                          future: _chatController.areBothUsersOnline(),
-                          builder: (context, snapshot) {
-                            if (snapshot.hasData && snapshot.data == true) {
-                              return Text(
-                                "Both Online",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: ColorConstants.green,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              );
-                            } else {
-                              return Text(
-                                _chatController.isOnline.value ? "Online" : "Offline",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: _chatController.isOnline.value 
-                                      ? ColorConstants.green 
-                                      : ColorConstants.red,
-                                ),
-                              );
-                            }
-                          },
-                        )),
+                        // Obx(() => FutureBuilder<bool>(
+                        //   future: _chatController.areBothUsersOnline(),
+                        //   builder: (context, snapshot) {
+                        //     if (snapshot.hasData && snapshot.data == true) {
+                        //       return Text(
+                        //         "Both Online",
+                        //         style: TextStyle(
+                        //           fontSize: 12,
+                        //           color: ColorConstants.green,
+                        //           fontWeight: FontWeight.bold,
+                        //         ),
+                        //       );
+                        //     } else {
+                        //       return Text(
+                        //         _chatController.isOnline.value ? "Online" : "Offline",
+                        //         style: TextStyle(
+                        //           fontSize: 12,
+                        //           color: _chatController.isOnline.value 
+                        //               ? ColorConstants.green 
+                        //               : ColorConstants.red,
+                        //         ),
+                        //       );
+                        //     }
+                        //   },
+                        // )),
                       ],
                     ),
                   );
@@ -556,34 +558,34 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                         widget.arguments.peerNickname,
                         style: TextStyle(
                           color: ColorConstants.primaryColor,
-                          fontSize: 15,
+                          fontSize: 18,
                         ),
                       ),
-                      Obx(() => FutureBuilder<bool>(
-                        future: _chatController.areBothUsersOnline(),
-                        builder: (context, snapshot) {
-                          if (snapshot.hasData && snapshot.data == true) {
-                            return Text(
-                              "Both Online",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: ColorConstants.green,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            );
-                          } else {
-                            return Text(
-                              _chatController.isOnline.value ? "Online" : "Offline",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: _chatController.isOnline.value 
-                                    ? ColorConstants.green 
-                                    : ColorConstants.red,
-                              ),
-                            );
-                          }
-                        },
-                      )),
+                      // Obx(() => FutureBuilder<bool>(
+                      //   future: _chatController.areBothUsersOnline(),
+                      //   builder: (context, snapshot) {
+                      //     if (snapshot.hasData && snapshot.data == true) {
+                      //       return Text(
+                      //         "Both Online",
+                      //         style: TextStyle(
+                      //           fontSize: 12,
+                      //           color: ColorConstants.green,
+                      //           fontWeight: FontWeight.bold,
+                      //         ),
+                      //       );
+                      //     } else {
+                      //       return Text(
+                      //         _chatController.isOnline.value ? "Online" : "Offline",
+                      //         style: TextStyle(
+                      //           fontSize: 12,
+                      //           color: _chatController.isOnline.value 
+                      //               ? ColorConstants.green 
+                      //               : ColorConstants.red,
+                      //         ),
+                      //       );
+                      //     }
+                      //   },
+                      // )),
                     ],
                   ),
                 );
@@ -820,7 +822,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                     _chatController.status.value =
                         snapshot.data?.docs.first['status'];
                     if (_chatController.status.value == false) {
-                      _chatController.updateDataFirestoreAllField(
+                      FirebaseService().updateDataFirestoreAllField(
                           FirestoreConstants.pathMessageCollection,
                           _chatController.groupChatId.value,
                           {

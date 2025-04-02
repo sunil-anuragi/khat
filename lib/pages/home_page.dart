@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -108,6 +109,25 @@ class HomePageState extends State<HomePage> {
       iOS: initializationSettingsIOS,
     );
     flutterLocalNotificationsPlugin.initialize(initializationSettings);
+
+    // Handle notification clicks
+    flutterLocalNotificationsPlugin.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        if (response.payload != null) {
+          final data = jsonDecode(response.payload!);
+          if (data['type'] == 'message') {
+            Get.to(() => ChatPage(
+              arguments: ChatPageArguments(
+                peerId: data['senderId'],
+                peerAvatar: data['senderAvatar'],
+                peerNickname: data['senderName'],
+              ),
+            ));
+          }
+        }
+      },
+    );
   }
 
   void scrollListener() {
@@ -139,9 +159,18 @@ class HomePageState extends State<HomePage> {
       enableVibration: true,
       importance: Importance.max,
       priority: Priority.high,
+      channelShowBadge: true,
+      actions: <AndroidNotificationAction>[
+        AndroidNotificationAction('open', 'Open'),
+        AndroidNotificationAction('close', 'Close'),
+      ],
     );
     DarwinNotificationDetails iOSPlatformChannelSpecifics =
-        DarwinNotificationDetails();
+        DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
     NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
       iOS: iOSPlatformChannelSpecifics,
@@ -149,13 +178,18 @@ class HomePageState extends State<HomePage> {
 
     print(remoteNotification);
 
-    await flutterLocalNotificationsPlugin.show(
-      0,
-      remoteNotification.title,
-      remoteNotification.body,
-      platformChannelSpecifics,
-      payload: null,
-    );
+    // await flutterLocalNotificationsPlugin.show(
+    //   0,
+    //   remoteNotification.title,
+    //   remoteNotification.body,
+    //   platformChannelSpecifics,
+    //   payload: jsonEncode({
+    //     'type': 'message',
+    //     'senderId': remoteNotification. da?['senderId'] ?? '',
+    //     'senderName': remoteNotification.data?['senderName'] ?? '',
+    //     'senderAvatar': remoteNotification.data?['senderAvatar'] ?? '',
+    //   }),
+    // );
   }
 
   Future<bool> onBackPress() {
@@ -323,67 +357,61 @@ class HomePageState extends State<HomePage> {
     );
   }
 
-  Widget buildSearchBar() {
-    return Container(
-      height: 40,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(Icons.search, color: ColorConstants.greyColor, size: 20),
-          SizedBox(width: 5),
-          Expanded(
-            child: TextFormField(
-              textInputAction: TextInputAction.search,
-              controller: searchBarTec,
-              onChanged: (value) {
-                searchDebouncer.run(() {
-                  if (value.isNotEmpty) {
-                    btnClearController.add(true);
-                    setState(() {
-                      _textSearch = value;
-                    });
-                  } else {
-                    btnClearController.add(false);
-                    setState(() {
-                      _textSearch = "";
-                    });
-                  }
+ Widget buildSearchBar() {
+  return Container(
+    height: 40,
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(Icons.search, color: ColorConstants.greyColor, size: 20),
+        SizedBox(width: 5),
+        Expanded(
+          child: TextFormField(
+            textInputAction: TextInputAction.search,
+            controller: searchBarTec,
+            onChanged: (value) {
+              searchDebouncer.run(() {
+                setState(() {
+                  _textSearch = value.toLowerCase().trim(); // Ensure case-insensitive search
                 });
-              },
-              decoration: InputDecoration.collapsed(
-                hintText: 'Search nickname (you have to type exactly string)',
-                hintStyle:
-                    TextStyle(fontSize: 13, color: ColorConstants.greyColor),
-              ),
-              style: TextStyle(fontSize: 13),
+                btnClearController.add(value.isNotEmpty);
+              });
+            },
+            decoration: InputDecoration.collapsed(
+              hintText: 'Search by nickname...',
+              hintStyle: TextStyle(fontSize: 13, color: ColorConstants.greyColor),
             ),
+            style: TextStyle(fontSize: 13),
           ),
-          StreamBuilder<bool>(
-              stream: btnClearController.stream,
-              builder: (context, snapshot) {
-                return snapshot.data == true
-                    ? GestureDetector(
-                        onTap: () {
-                          searchBarTec.clear();
-                          btnClearController.add(false);
-                          setState(() {
-                            _textSearch = "";
-                          });
-                        },
-                        child: Icon(Icons.clear_rounded,
-                            color: ColorConstants.greyColor, size: 20))
-                    : SizedBox.shrink();
-              }),
-        ],
-      ),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: ColorConstants.greyColor2,
-      ),
-      padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-      margin: EdgeInsets.fromLTRB(16, 8, 16, 8),
-    );
-  }
+        ),
+        StreamBuilder<bool>(
+          stream: btnClearController.stream,
+          builder: (context, snapshot) {
+            return snapshot.data == true
+                ? GestureDetector(
+                    onTap: () {
+                      searchBarTec.clear();
+                      btnClearController.add(false);
+                      setState(() {
+                        _textSearch = "";
+                      });
+                    },
+                    child: Icon(Icons.clear_rounded, color: ColorConstants.greyColor, size: 20),
+                  )
+                : SizedBox.shrink();
+          },
+        ),
+      ],
+    ),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(16),
+      color: ColorConstants.greyColor2,
+    ),
+    padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+    margin: EdgeInsets.fromLTRB(16, 8, 16, 8),
+  );
+}
+
 
   Widget buildPopupMenu() {
     return PopupMenuButton<PopupChoices>(
@@ -418,6 +446,47 @@ class HomePageState extends State<HomePage> {
       if (userChat.id == currentUserId) {
         return SizedBox.shrink();
       } else {
+        // Highlight matching text if there's a search query
+        Widget buildNicknameText() {
+          if (_textSearch.isEmpty) {
+            return Text(
+              '${userChat.nickname}',
+              maxLines: 1,
+              style: TextStyle(color: ColorConstants.primaryColor),
+            );
+          }
+
+          final nickname = userChat.nickname.toLowerCase();
+          final searchQuery = _textSearch.toLowerCase();
+          final matchIndex = nickname.indexOf(searchQuery);
+
+          if (matchIndex == -1) return SizedBox.shrink();
+
+          return RichText(
+            maxLines: 1,
+            text: TextSpan(
+              style: TextStyle(color: ColorConstants.primaryColor),
+              children: [
+                TextSpan(text: userChat.nickname.substring(0, matchIndex)),
+                TextSpan(
+                  text: userChat.nickname.substring(
+                    matchIndex,
+                    matchIndex + searchQuery.length,
+                  ),
+                  style: TextStyle(
+                    color: ColorConstants.primaryColor,
+                    fontWeight: FontWeight.bold,
+                    backgroundColor: Colors.yellow.withOpacity(0.3),
+                  ),
+                ),
+                TextSpan(
+                  text: userChat.nickname.substring(matchIndex + searchQuery.length),
+                ),
+              ],
+            ),
+          );
+        }
+
         return Container(
           child: TextButton(
             child: Row(
@@ -468,12 +537,7 @@ class HomePageState extends State<HomePage> {
                     child: Column(
                       children: <Widget>[
                         Container(
-                          child: Text(
-                            '${userChat.nickname}',
-                            maxLines: 1,
-                            style:
-                                TextStyle(color: ColorConstants.primaryColor),
-                          ),
+                          child: buildNicknameText(),
                           alignment: Alignment.centerLeft,
                           margin: EdgeInsets.fromLTRB(10, 0, 0, 5),
                         ),
@@ -481,8 +545,7 @@ class HomePageState extends State<HomePage> {
                           child: Text(
                             'About me: ${userChat.aboutMe}',
                             maxLines: 1,
-                            style:
-                                TextStyle(color: ColorConstants.primaryColor),
+                            style: TextStyle(color: ColorConstants.primaryColor),
                           ),
                           alignment: Alignment.centerLeft,
                           margin: EdgeInsets.fromLTRB(10, 0, 0, 0),

@@ -2,19 +2,23 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import '../firebase_options.dart';
+
 class PushNotificationService {
-// It is assumed that all messages contain a data field with the key 'type'
   Future<void> setupInteractedMessage() async {
-    await Firebase.initializeApp();
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      // Get.toNamed(NOTIFICATIONS_ROUTE);
-      if (message.data['type'] == 'chat') {
-        // Navigator.pushNamed(context, '/chat',
-        //     arguments: ChatArguments(message));
-      }
-    });
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {});
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     enableIOSNotifications();
+    requestionpermiison();
     await registerNotificationListeners();
+  }
+
+  Future<void> _firebaseMessagingBackgroundHandler(
+      RemoteMessage message) async {
+    print("Handling a background message: ${message.messageId}");
   }
 
   Future<void> registerNotificationListeners() async {
@@ -74,6 +78,23 @@ class PushNotificationService {
       badge: true,
       sound: true,
     );
+  }
+
+  requestionpermiison() async {
+    FirebaseMessaging messaging = FirebaseMessaging.instance;
+    NotificationSettings settings = await messaging.requestPermission(
+      alert: true,
+      badge: true,
+      provisional: false,
+      sound: true,
+    );
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      print('User granted permission');
+      String? token = await messaging.getToken();
+      print('Token: $token');
+    } else {
+      print('User declined or has not accepted permission');
+    }
   }
 
   AndroidNotificationChannel androidNotificationChannel() =>

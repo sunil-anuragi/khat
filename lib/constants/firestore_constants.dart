@@ -5,7 +5,7 @@ class FirestoreConstants {
   static const String pathCallCollection = "calls";
   static const String pathContactCollection = "contacts";
   static const String pathNotificationCollection = "notifications";
-
+  
   static const String nickname = "nickname";
   static const String aboutMe = "aboutMe";
   static const String photoUrl = "photoUrl";

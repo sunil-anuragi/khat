@@ -1,13 +1,14 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_chat_demo/constants/constants.dart';
 import 'package:flutter_chat_demo/models/models.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../service/firebase_service.dart';
 
-class ChatController extends GetxController {
+class ChatController extends GetxController with WidgetsBindingObserver {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final SharedPreferences _prefs = Get.find<SharedPreferences>();
@@ -30,18 +31,91 @@ class ChatController extends GetxController {
   final RxString lastMessageTime = ''.obs;
   final RxList<String> participants = <String>[].obs;
   final RxMap<String, bool> typingStatus = <String, bool>{}.obs;
+  final RxBool isOffline = false.obs;
+  final RxList<Map<String, dynamic>> pendingMessages =
+      <Map<String, dynamic>>[].obs;
 
   @override
   void onInit() {
-    super.onInit();
+    WidgetsBinding.instance.addObserver(this);
     readLocal();
+    enableOfflinePersistence();
+    super.onInit();
+  }
+
+  @override
+  void onClose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.onClose();
+  }
+
+  Future<void> enableOfflinePersistence() async {
+    try {
+      await _firestore.enablePersistence(
+        const PersistenceSettings(synchronizeTabs: true),
+      );
+    } catch (e) {
+      if (e is FirebaseException) {
+        if (e.code == 'failed-precondition') {
+          // Multiple tabs open, persistence can only be enabled in one tab at a time
+          print(
+              'Multiple tabs open, persistence can only be enabled in one tab at a time');
+        } else if (e.code == 'unimplemented') {
+          // The current browser doesn't support persistence
+          print('The current browser doesn\'t support persistence');
+        }
+      }
+    }
   }
 
   void readLocal() {
     currentUserId.value = _prefs.getString(FirestoreConstants.id) ?? '';
   }
 
-  Future<void> setCurrentChatUser(String peerId, String peerAvatar, String peerNickname) async {
+  // Add method to check network connectivity
+  Future<void> checkConnectivity() async {
+    try {
+      await _firestore.collection('test').doc('test').get();
+      isOffline.value = false;
+      // If we're back online, try to send pending messages
+      if (pendingMessages.isNotEmpty) {
+        await sendPendingMessages();
+      }
+    } catch (e) {
+      isOffline.value = true;
+    }
+  }
+
+  // Add method to send pending messages
+  Future<void> sendPendingMessages() async {
+    for (var message in pendingMessages) {
+      try {
+        await _firestore
+            .collection(FirestoreConstants.pathMessageCollection)
+            .doc(groupChatId.value)
+            .collection(groupChatId.value)
+            .add(message);
+
+        // Update last message and time
+        await FirebaseService().updateDataFirestoreAllField(
+          FirestoreConstants.pathMessageCollection,
+          groupChatId.value,
+          {
+            'lastMessage': message['content'],
+            'lastMessageTime': message['timestamp'],
+            'lastMessageStatus': message['status'],
+            'lastMessageRead': message['isRead'],
+          },
+        );
+      } catch (e) {
+        print('Error sending pending message: $e');
+      }
+    }
+    pendingMessages.clear();
+  }
+
+  Future<void> setCurrentChatUser(
+      String peerId, String peerAvatar, String peerNickname) async {
     if (currentUserId.value.isEmpty) {
       Get.snackbar(
         'Error',
@@ -54,7 +128,7 @@ class ChatController extends GetxController {
     this.peerId.value = peerId;
     this.peerAvatar.value = peerAvatar;
     this.peerNickname.value = peerNickname;
-    
+
     if (currentUserId.value.compareTo(peerId) > 0) {
       groupChatId.value = '$currentUserId-$peerId';
     } else {
@@ -85,22 +159,27 @@ class ChatController extends GetxController {
             currentUserId.value: true,
             peerId: false,
           },
-          'isonline': false,
-          'status': false,
+          // 'isonline': false,
+          // 'status': false,
         });
       } else {
         // Update current user's online status
-        await updateDataFirestore(
+        await FirebaseService().updateDataFirestore(
           FirestoreConstants.pathMessageCollection,
           groupChatId.value,
           {
             'onlineStatus.${currentUserId.value}': true,
           },
         );
+
+        // If current user is the receiver, mark all messages as read
+        if (currentUserId.value == peerId) {
+          await markMessagesAsRead();
+        }
       }
 
       // Update current user's chatting status
-      await updateDataFirestore(
+      await FirebaseService().updateDataFirestore(
         FirestoreConstants.pathUserCollection,
         currentUserId.value,
         {FirestoreConstants.chattingWith: peerId},
@@ -111,18 +190,23 @@ class ChatController extends GetxController {
           .collection(FirestoreConstants.pathMessageCollection)
           .doc(groupChatId.value)
           .snapshots()
-          .listen((snapshot) {
+          .listen((snapshot) async {
         if (snapshot.exists) {
           final data = snapshot.data() as Map<String, dynamic>;
           participants.value = List<String>.from(data['participants'] ?? []);
           lastMessage.value = data['lastMessage'] ?? '';
           lastMessageTime.value = data['lastMessageTime'] ?? '';
-          typingStatus.value = Map<String, bool>.from(data['typingStatus'] ?? {});
-          isOnline.value = data['isonline'] ?? false;
-          status.value = data['status'] ?? false;
+          typingStatus.value =
+              Map<String, bool>.from(data['typingStatus'] ?? {});
+          // isOnline.value = data['isonline'] ?? false;
+          // status.value = data['status'] ?? false;
+
+          // If current user is the receiver, mark all messages as read
+          if (currentUserId.value == peerId) {
+            await markMessagesAsRead();
+          }
         }
       });
-
     } catch (e) {
       print('Error setting up chat: $e');
       Get.snackbar(
@@ -133,64 +217,36 @@ class ChatController extends GetxController {
     }
   }
 
-  Future<void> uploadFile(File file) async {
-    if (groupChatId.value.isEmpty) {
-      Get.snackbar(
-        'Error',
-        'Chat not initialized',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-      return;
-    }
+//***** For upload file ***************//
 
-    try {
-      isLoading.value = true;
-      String fileName = DateTime.now().millisecondsSinceEpoch.toString();
-      final ref = _storage.ref().child('uploads/$fileName');
-      final uploadTask = ref.putFile(file);
-      final snapshot = await uploadTask;
-      imageUrl.value = await snapshot.ref.getDownloadURL();
-      
-      await sendMessage(imageUrl.value, 1); // 1 for image type
-    } catch (e) {
-      print('Error uploading file: $e');
-      Get.snackbar(
-        'Error',
-        'Failed to upload file',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-    } finally {
-      isLoading.value = false;
-    }
-  }
-
-  Future<void> updateDataFirestore(String collectionPath, String docPath, Map<String, dynamic> data) async {
-    if (collectionPath.isEmpty || docPath.isEmpty) {
-      print('Error: Collection path or document path is empty');
-      return;
-    }
-
-    try {
-      await _firestore.collection(collectionPath).doc(docPath).update(data);
-    } catch (e) {
-      print('Error updating data: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> updateDataFirestoreAllField(String collectionPath, String docPath, Map<String, dynamic> data) async {
-    if (collectionPath.isEmpty || docPath.isEmpty) {
-      print('Error: Collection path or document path is empty');
-      return;
-    }
-
-    try {
-      await _firestore.collection(collectionPath).doc(docPath).set(data);
-    } catch (e) {
-      print('Error updating data: $e');
-      rethrow;
-    }
-  }
+  // Future<void> uploadFile(File file) async {
+  //   if (groupChatId.value.isEmpty) {
+  //     Get.snackbar(
+  //       'Error',
+  //       'Chat not initialized',
+  //       snackPosition: SnackPosition.BOTTOM,
+  //     );
+  //     return;
+  //   }
+  //   try {
+  //     isLoading.value = true;
+  //     String fileName = DateTime.now().millisecondsSinceEpoch.toString();
+  //     final ref = _storage.ref().child('uploads/$fileName');
+  //     final uploadTask = ref.putFile(file);
+  //     final snapshot = await uploadTask;
+  //     imageUrl.value = await snapshot.ref.getDownloadURL();
+  //     await sendMessage(imageUrl.value, 1); // 1 for image type
+  //   } catch (e) {
+  //     print('Error uploading file: $e');
+  //     Get.snackbar(
+  //       'Error',
+  //       'Failed to upload file',
+  //       snackPosition: SnackPosition.BOTTOM,
+  //     );
+  //   } finally {
+  //     isLoading.value = false;
+  //   }
+  // }
 
   Future<void> sendMessage(String content, int type) async {
     if (groupChatId.value.isEmpty) {
@@ -204,6 +260,17 @@ class ChatController extends GetxController {
 
     if (content.trim().isNotEmpty) {
       try {
+        // Check if receiver is online
+        final chatDoc = await _firestore
+            .collection(FirestoreConstants.pathMessageCollection)
+            .doc(groupChatId.value)
+            .get();
+
+        final onlineStatus =
+            chatDoc.data()?['onlineStatus'] as Map<String, dynamic>?;
+        final isReceiverOnline =
+            onlineStatus != null && onlineStatus[peerId.value] == true;
+
         final message = MessageChat(
           idFrom: currentUserId.value,
           idTo: peerId.value,
@@ -213,29 +280,40 @@ class ChatController extends GetxController {
           istyping: false,
           whotyping: '',
           isonline: false,
-          status: false,
-          isRead: false,
+          status: isReceiverOnline,
+          isRead: isReceiverOnline,
         );
 
-        // Add message to chat collection
-        await _firestore
-            .collection(FirestoreConstants.pathMessageCollection)
-            .doc(groupChatId.value)
-            .collection(groupChatId.value)
-            .add(message.toJson());
+        // Check if we're offline
+        if (isOffline.value) {
+          // Store message locally
+          pendingMessages.add(message.toJson());
+          Get.snackbar(
+            'Offline',
+            'Message will be sent when you\'re back online',
+            snackPosition: SnackPosition.BOTTOM,
+          );
+        } else {
+          // Send message immediately
+          await _firestore
+              .collection(FirestoreConstants.pathMessageCollection)
+              .doc(groupChatId.value)
+              .collection(groupChatId.value)
+              .add(message.toJson());
 
-        // Update last message and time
-        await updateDataFirestoreAllField(
-          FirestoreConstants.pathMessageCollection,
-          groupChatId.value,
-          {
-            'lastMessage': content,
-            'lastMessageTime': message.timestamp,
-            'lastMessageStatus': false,
-            'lastMessageRead': false,
-          },
-        );
-
+          // Update last message and time
+          await FirebaseService().updateDataFirestoreAllField(
+            FirestoreConstants.pathMessageCollection,
+            groupChatId.value,
+            {
+              'lastMessage': content,
+              'lastMessageTime': message.timestamp,
+              'lastMessageStatus': isReceiverOnline,
+              'lastMessageRead': isReceiverOnline,
+            },
+          );
+          sendNotificationToUser(content);
+        }
       } catch (e) {
         print('Error sending message: $e');
         Get.snackbar(
@@ -272,10 +350,9 @@ class ChatController extends GetxController {
     if (groupChatId.value.isEmpty) {
       return;
     }
-
     if (isTypingLocal.value != isTyping.value) {
       isTypingLocal.value = isTyping.value;
-      updateDataFirestore(
+      FirebaseService().updateDataFirestore(
         FirestoreConstants.pathMessageCollection,
         groupChatId.value,
         {
@@ -285,22 +362,18 @@ class ChatController extends GetxController {
     }
   }
 
-  bool isUserTyping(String userId) {
-    return typingStatus[userId] ?? false;
-  }
-
   void clearCurrentChatUser() {
     if (currentUserId.value.isNotEmpty) {
       // Update current user's online status to false
-      updateDataFirestore(
+      FirebaseService().updateDataFirestore(
         FirestoreConstants.pathMessageCollection,
         groupChatId.value,
         {
           'onlineStatus.${currentUserId.value}': false,
         },
       );
-      
-      updateDataFirestore(
+
+      FirebaseService().updateDataFirestore(
         FirestoreConstants.pathUserCollection,
         currentUserId.value,
         {FirestoreConstants.chattingWith: null},
@@ -321,20 +394,41 @@ class ChatController extends GetxController {
         .collection(FirestoreConstants.pathMessageCollection)
         .doc(groupChatId.value)
         .get();
-    
+
     final onlineStatus = doc.data()?['onlineStatus'] as Map<String, dynamic>?;
     if (onlineStatus == null) return false;
-    
-    return onlineStatus[currentUserId.value] == true && 
-           onlineStatus[peerId.value] == true;
+
+    return onlineStatus[currentUserId.value] == true &&
+        onlineStatus[peerId.value] == true;
   }
 
-  // Add method to mark messages as read
+  // ************* continues update read satatus *********//
+
+  // void listenForUnreadMessages() {
+  //    if (!isScreenOpen.value) return;
+  //   messageStream = _firestore
+  //       .collection(FirestoreConstants.pathMessageCollection)
+  //       .doc(groupChatId.value)
+  //       .collection(groupChatId.value)
+  //       .where('idTo', isEqualTo: currentUserId.value)
+  //       .where('isRead', isEqualTo: false)
+  //       .snapshots();
+  //   messageStream!.listen((snapshot) {
+  //       if (!isScreenOpen.value) return;
+  //     for (var doc in snapshot.docs) {
+  //       doc.reference
+  //           .update({'isRead': true});
+  //         } // Mark each unread message as read
+  //   });
+  // }
+
+  // Update markMessagesAsRead to handle receiver's messages
+
   Future<void> markMessagesAsRead() async {
     if (groupChatId.value.isEmpty) return;
 
     try {
-      // Get all unread messages
+      // Get all unread messages for the current user (receiver)
       final unreadMessages = await _firestore
           .collection(FirestoreConstants.pathMessageCollection)
           .doc(groupChatId.value)
@@ -352,7 +446,7 @@ class ChatController extends GetxController {
       }
 
       // Update last message status in chat document
-      await updateDataFirestore(
+      await FirebaseService().updateDataFirestore(
         FirestoreConstants.pathMessageCollection,
         groupChatId.value,
         {
@@ -365,13 +459,45 @@ class ChatController extends GetxController {
     }
   }
 
-  // Add method to check if message is read
-  bool isMessageRead(DocumentSnapshot message) {
-    return message.get('isRead') ?? false;
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Check connectivity when app resumes
+      checkConnectivity();
+
+      Future.delayed(const Duration(milliseconds: 500), () {
+        FirebaseService().updateDataFirestoreAllField(
+          FirestoreConstants.pathMessageCollection,
+          groupChatId.value,
+          {'isonline': true},
+        );
+      });
+    } else {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        FirebaseService().updateDataFirestoreAllField(
+          FirestoreConstants.pathMessageCollection,
+          groupChatId.value,
+          {'isonline': false},
+        );
+      });
+    }
   }
 
-  // Add method to check if message is delivered
-  bool isMessageDelivered(DocumentSnapshot message) {
-    return message.get('status') ?? false;
+  Future<String?> sendNotificationToUser(content) async {
+    try {
+      final userDoc = await _firestore
+          .collection(FirestoreConstants.pathUserCollection)
+          .doc(peerId.value)
+          .get();
+
+      if (userDoc.exists) {
+        await FirebaseService().sendFCMMessage(userDoc.data()?['pushToken'],
+            title: "You have new message", body: content);
+      }
+      return null;
+    } catch (e) {
+      print('Error getting receiver push token: $e');
+      return null;
+    }
   }
-} 
+}
