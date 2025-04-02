@@ -11,8 +11,6 @@ import 'package:flutter_chat_demo/utils/utils.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import '../models/models.dart';
 import '../widgets/widgets.dart';
 import 'pages.dart';
@@ -471,7 +469,7 @@ class HomePageState extends State<HomePage> {
                       children: <Widget>[
                         Container(
                           child: Text(
-                            'Nickname: ${userChat.nickname}',
+                            '${userChat.nickname}',
                             maxLines: 1,
                             style:
                                 TextStyle(color: ColorConstants.primaryColor),

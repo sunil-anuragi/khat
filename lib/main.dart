@@ -9,12 +9,9 @@ import 'package:flutter_chat_demo/controllers/auth_controller.dart';
 import 'package:flutter_chat_demo/controllers/chat_controller.dart';
 import 'package:flutter_chat_demo/controllers/home_controller.dart';
 import 'package:flutter_chat_demo/controllers/setting_controller.dart';
-import 'package:flutter_chat_demo/service/PushnotificationService.dart';
 import 'package:get/get.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import 'constants/color_constants.dart';
 import 'pages/pages.dart';
 
@@ -22,11 +19,11 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
 
-  // Initialize Firebase services
+ 
   final firebaseAuth = FirebaseAuth.instance;
   final googleSignIn = GoogleSignIn();
   final firebaseFirestore = FirebaseFirestore.instance;
-  final firebaseStorage = FirebaseStorage.instance;
+  // final firebaseStorage = FirebaseStorage.instance;
 
   // Initialize SharedPreferences
   final prefs = await SharedPreferences.getInstance();
@@ -48,8 +45,6 @@ void main() async {
   } else {
     print('User declined or has not accepted permission');
   }
-
-  // Initialize controllers
   Get.put(AuthController(
     firebaseAuth: firebaseAuth,
     googleSignIn: googleSignIn,
