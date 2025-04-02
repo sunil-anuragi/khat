@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_chat_demo/constants/color_constants.dart';
-import 'package:flutter_chat_demo/providers/auth_provider.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_chat_demo/controllers/auth_controller.dart';
+import 'package:get/get.dart';
 
 import 'pages.dart';
 
@@ -13,6 +13,8 @@ class SplashPage extends StatefulWidget {
 }
 
 class SplashPageState extends State<SplashPage> {
+  final _authController = Get.find<AuthController>();
+
   @override
   void initState() {
     super.initState();
@@ -23,19 +25,12 @@ class SplashPageState extends State<SplashPage> {
   }
 
   void checkSignedIn() async {
-    AuthProvider authProvider = context.read<AuthProvider>();
-    bool isLoggedIn = await authProvider.isLoggedIn();
+    bool isLoggedIn = await _authController.isLoggedIn();
     if (isLoggedIn) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => HomePage()),
-      );
+      Get.off(() => HomePage());
       return;
     }
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => LoginPage()),
-    );
+    Get.off(() => LoginPage());
   }
 
   @override

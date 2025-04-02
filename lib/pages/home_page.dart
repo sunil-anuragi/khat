@@ -5,12 +5,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_chat_demo/constants/constants.dart';
-import 'package:flutter_chat_demo/providers/providers.dart';
+import 'package:flutter_chat_demo/controllers/auth_controller.dart';
+import 'package:flutter_chat_demo/controllers/home_controller.dart';
 import 'package:flutter_chat_demo/utils/utils.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:fluttertoast/fluttertoast.dart';
+import 'package:get/get.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/models.dart';
@@ -33,13 +33,14 @@ class HomePageState extends State<HomePage> {
   final GoogleSignIn googleSignIn = GoogleSignIn();
   final ScrollController listScrollController = ScrollController();
 
+  final _authController = Get.find<AuthController>();
+  final _homeController = Get.find<HomeController>();
+
   int _limit = 20;
   final int _limitIncrement = 20;
   String _textSearch = "";
   bool isLoading = false;
 
-  late final AuthProvider authProvider = context.read<AuthProvider>();
-  late final HomeProvider homeProvider = context.read<HomeProvider>();
   late final String currentUserId;
 
   final Debouncer searchDebouncer = Debouncer(milliseconds: 300);
@@ -54,13 +55,10 @@ class HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    if (authProvider.getUserFirebaseId()?.isNotEmpty == true) {
-      currentUserId = authProvider.getUserFirebaseId()!;
+    if (_authController.getUserFirebaseId()?.isNotEmpty == true) {
+      currentUserId = _authController.getUserFirebaseId()!;
     } else {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => LoginPage()),
-        (Route<dynamic> route) => false,
-      );
+      Get.offAll(() => LoginPage());
     }
     registerNotification();
     configLocalNotification();
@@ -87,11 +85,18 @@ class HomePageState extends State<HomePage> {
     firebaseMessaging.getToken().then((token) {
       print('push token: $token');
       if (token != null) {
-        homeProvider.updateDataFirestore(FirestoreConstants.pathUserCollection,
-            currentUserId, {'pushToken': token});
+        _homeController.updateDataFirestore(
+          FirestoreConstants.pathUserCollection,
+          currentUserId,
+          {'pushToken': token},
+        );
       }
     }).catchError((err) {
-      Fluttertoast.showToast(msg: err.message.toString());
+      Get.snackbar(
+        'Error',
+        err.message.toString(),
+        snackPosition: SnackPosition.BOTTOM,
+      );
     });
   }
 
@@ -121,8 +126,7 @@ class HomePageState extends State<HomePage> {
     if (choice.title == 'Log out') {
       handleSignOut();
     } else {
-      Navigator.push(
-          context, MaterialPageRoute(builder: (context) => SettingsPage()));
+      Get.to(() => SettingsPage());
     }
   }
 
@@ -162,90 +166,87 @@ class HomePageState extends State<HomePage> {
   }
 
   Future<void> openDialog() async {
-    switch (await showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return SimpleDialog(
-            clipBehavior: Clip.hardEdge,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            contentPadding: EdgeInsets.zero,
-            children: <Widget>[
-              Container(
-                color: ColorConstants.themeColor,
-                padding: EdgeInsets.only(bottom: 10, top: 10),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Container(
-                      child: Icon(
-                        Icons.exit_to_app,
-                        size: 30,
-                        color: Colors.white,
-                      ),
-                      margin: EdgeInsets.only(bottom: 10),
-                    ),
-                    Text(
-                      'Exit app',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      'Are you sure to exit app?',
-                      style: TextStyle(color: Colors.white70, fontSize: 14),
-                    ),
-                  ],
+    switch (await Get.dialog<int>(
+      SimpleDialog(
+        clipBehavior: Clip.hardEdge,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        contentPadding: EdgeInsets.zero,
+        children: <Widget>[
+          Container(
+            color: ColorConstants.themeColor,
+            padding: EdgeInsets.only(bottom: 10, top: 10),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Container(
+                  child: Icon(
+                    Icons.exit_to_app,
+                    size: 30,
+                    color: Colors.white,
+                  ),
+                  margin: EdgeInsets.only(bottom: 10),
                 ),
-              ),
-              SimpleDialogOption(
-                onPressed: () {
-                  Navigator.pop(context, 0);
-                },
-                child: Row(
-                  children: <Widget>[
-                    Container(
-                      child: Icon(
-                        Icons.cancel,
-                        color: ColorConstants.primaryColor,
-                      ),
-                      margin: EdgeInsets.only(right: 10),
-                    ),
-                    Text(
-                      'Cancel',
-                      style: TextStyle(
-                          color: ColorConstants.primaryColor,
-                          fontWeight: FontWeight.bold),
-                    )
-                  ],
+                Text(
+                  'Exit app',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold),
                 ),
-              ),
-              SimpleDialogOption(
-                onPressed: () {
-                  Navigator.pop(context, 1);
-                },
-                child: Row(
-                  children: <Widget>[
-                    Container(
-                      child: Icon(
-                        Icons.check_circle,
-                        color: ColorConstants.primaryColor,
-                      ),
-                      margin: EdgeInsets.only(right: 10),
-                    ),
-                    Text(
-                      'Yes',
-                      style: TextStyle(
-                          color: ColorConstants.primaryColor,
-                          fontWeight: FontWeight.bold),
-                    )
-                  ],
+                Text(
+                  'Are you sure to exit app?',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
                 ),
-              ),
-            ],
-          );
-        })) {
+              ],
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () {
+              Get.back(result: 0);
+            },
+            child: Row(
+              children: <Widget>[
+                Container(
+                  child: Icon(
+                    Icons.cancel,
+                    color: ColorConstants.primaryColor,
+                  ),
+                  margin: EdgeInsets.only(right: 10),
+                ),
+                Text(
+                  'Cancel',
+                  style: TextStyle(
+                      color: ColorConstants.primaryColor,
+                      fontWeight: FontWeight.bold),
+                )
+              ],
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () {
+              Get.back(result: 1);
+            },
+            child: Row(
+              children: <Widget>[
+                Container(
+                  child: Icon(
+                    Icons.check_circle,
+                    color: ColorConstants.primaryColor,
+                  ),
+                  margin: EdgeInsets.only(right: 10),
+                ),
+                Text(
+                  'Yes',
+                  style: TextStyle(
+                      color: ColorConstants.primaryColor,
+                      fontWeight: FontWeight.bold),
+                )
+              ],
+            ),
+          ),
+        ],
+      ),
+    )) {
       case 0:
         break;
       case 1:
@@ -254,11 +255,8 @@ class HomePageState extends State<HomePage> {
   }
 
   Future<void> handleSignOut() async {
-    authProvider.handleSignOut();
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => LoginPage()),
-      (Route<dynamic> route) => false,
-    );
+    await _authController.handleSignOut();
+    Get.offAll(() => LoginPage());
   }
 
   @override
@@ -282,7 +280,7 @@ class HomePageState extends State<HomePage> {
                   buildSearchBar(),
                   Expanded(
                     child: StreamBuilder<QuerySnapshot>(
-                      stream: homeProvider.getStreamFireStore(
+                      stream: _homeController.getStreamFireStore(
                           FirestoreConstants.pathUserCollection,
                           _limit,
                           _textSearch),
@@ -502,18 +500,13 @@ class HomePageState extends State<HomePage> {
               if (Utilities.isKeyboardShowing()) {
                 Utilities.closeKeyboard(context);
               }
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ChatPage(
+              Get.to(() => ChatPage(
                     arguments: ChatPageArguments(
                       peerId: userChat.id,
                       peerAvatar: userChat.photoUrl,
                       peerNickname: userChat.nickname,
                     ),
-                  ),
-                ),
-              );
+                  ));
             },
             style: ButtonStyle(
               backgroundColor:

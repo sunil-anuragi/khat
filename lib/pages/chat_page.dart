@@ -4,15 +4,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_chat_demo/constants/constants.dart';
+import 'package:flutter_chat_demo/controllers/chat_controller.dart';
 import 'package:flutter_chat_demo/models/models.dart';
-import 'package:flutter_chat_demo/providers/providers.dart';
-import 'package:fluttertoast/fluttertoast.dart';
+import 'package:flutter_chat_demo/widgets/widgets.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
-import '../providers/Chatctrl.dart';
-import '../widgets/widgets.dart';
 import 'pages.dart';
 
 class ChatPage extends StatefulWidget {
@@ -25,28 +22,14 @@ class ChatPage extends StatefulWidget {
 }
 
 class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
-  late final String currentUserId;
+  final _chatController = Get.find<ChatController>();
+  final TextEditingController textEditingController = TextEditingController();
+  final ScrollController listScrollController = ScrollController();
+  final FocusNode focusNode = FocusNode();
 
   List<QueryDocumentSnapshot> listMessage = [];
   int _limit = 20;
   int _limitIncrement = 20;
-  String groupChatId = "";
-
-  File? imageFile;
-  bool isLoading = false;
-  bool isShowSticker = false;
-  String imageUrl = "";
-
-  final TextEditingController textEditingController = TextEditingController();
-  final ScrollController listScrollController = ScrollController();
-  final FocusNode focusNode = FocusNode();
-  Chatctrl _chatctrl = Get.put(Chatctrl());
-  late final ChatProvider chatProvider = context.read<ChatProvider>();
-  late final AuthProvider authProvider = context.read<AuthProvider>();
-
-  bool istyping = false;
-  bool istyping_local = false;
-  var idform = "";
 
   @override
   void initState() {
@@ -54,24 +37,30 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     focusNode.addListener(onFocusChange);
     listScrollController.addListener(_scrollListener);
     WidgetsBinding.instance.addObserver(this);
-    readLocal();
+    _chatController.setCurrentChatUser(
+      widget.arguments.peerId,
+      widget.arguments.peerAvatar,
+      widget.arguments.peerNickname,
+    );
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       Future.delayed(const Duration(milliseconds: 500), () {
-        chatProvider.updateDataFirestoreallfiled(
-            FirestoreConstants.pathMessageCollection, groupChatId, {
-          FirestoreConstants.isonline: true,
-        });
+        _chatController.updateDataFirestoreAllField(
+          FirestoreConstants.pathMessageCollection,
+          _chatController.groupChatId.value,
+          {'isonline': true},
+        );
       });
     } else {
       Future.delayed(const Duration(milliseconds: 500), () {
-        chatProvider.updateDataFirestoreallfiled(
-            FirestoreConstants.pathMessageCollection, groupChatId, {
-          FirestoreConstants.isonline: false,
-        });
+        _chatController.updateDataFirestoreAllField(
+          FirestoreConstants.pathMessageCollection,
+          _chatController.groupChatId.value,
+          {'isonline': false},
+        );
       });
     }
   }
@@ -90,104 +79,58 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   void onFocusChange() {
     if (focusNode.hasFocus) {
-      // Hide sticker when keyboard appear
-      setState(() {
-        isShowSticker = false;
-      });
+      _chatController.isShowSticker.value = false;
     }
-  }
-
-  Future<void> readLocal() async {
-    if (authProvider.getUserFirebaseId()?.isNotEmpty == true) {
-      currentUserId = authProvider.getUserFirebaseId()!;
-    } else {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => LoginPage()),
-        (Route<dynamic> route) => false,
-      );
-    }
-    String peerId = widget.arguments.peerId;
-    if (currentUserId.compareTo(peerId) > 0) {
-      groupChatId = '$currentUserId-$peerId';
-    } else {
-      groupChatId = '$peerId-$currentUserId';
-    }
-
-    chatProvider.updateDataFirestore(
-      FirestoreConstants.pathUserCollection,
-      currentUserId,
-      {FirestoreConstants.chattingWith: peerId},
-    );
   }
 
   Future getImage() async {
     ImagePicker imagePicker = ImagePicker();
-    XFile? pickedFile = await imagePicker
-        .pickImage(source: ImageSource.gallery)
-        .catchError((err) {
-      Fluttertoast.showToast(msg: err.toString());
+    XFile? pickedFile = await imagePicker.pickImage(source: ImageSource.gallery).catchError((err) {
+      Get.snackbar(
+        'Error',
+        err.toString(),
+        snackPosition: SnackPosition.BOTTOM,
+      );
       return null;
     });
     if (pickedFile != null) {
-      imageFile = File(pickedFile.path);
-      if (imageFile != null) {
-        setState(() {
-          isLoading = true;
-        });
-        uploadFile();
+      _chatController.imageFile.value = File(pickedFile.path);
+      if (_chatController.imageFile.value != null) {
+        await _chatController.uploadFile(_chatController.imageFile.value!);
       }
     }
   }
 
   void getSticker() {
-    // Hide keyboard when sticker appear
     focusNode.unfocus();
-    setState(() {
-      isShowSticker = !isShowSticker;
-    });
-  }
-
-  Future uploadFile() async {
-    String fileName = DateTime.now().millisecondsSinceEpoch.toString();
-    UploadTask uploadTask = chatProvider.uploadFile(imageFile!, fileName);
-    try {
-      TaskSnapshot snapshot = await uploadTask;
-      imageUrl = await snapshot.ref.getDownloadURL();
-      setState(() {
-        isLoading = false;
-        onSendMessage(imageUrl, TypeMessage.image);
-      });
-    } on FirebaseException catch (e) {
-      setState(() {
-        isLoading = false;
-      });
-      Fluttertoast.showToast(msg: e.message ?? e.toString());
-    }
+    _chatController.isShowSticker.value = !_chatController.isShowSticker.value;
   }
 
   void onSendMessage(String content, int type) {
     if (content.trim().isNotEmpty) {
       textEditingController.clear();
-      chatProvider.sendMessage(content, type, groupChatId, currentUserId,
-          widget.arguments.peerId, currentUserId, true, false);
+      _chatController.sendMessage(content, type);
       if (listScrollController.hasClients) {
         listScrollController.animateTo(0,
             duration: Duration(milliseconds: 300), curve: Curves.easeOut);
       }
     } else {
-      Fluttertoast.showToast(
-          msg: 'Nothing to send', backgroundColor: ColorConstants.greyColor);
+      Get.snackbar(
+        'Error',
+        'Nothing to send',
+        snackPosition: SnackPosition.BOTTOM,
+      );
     }
   }
 
   Widget buildItem(int index, DocumentSnapshot? document) {
     if (document != null) {
       MessageChat messageChat = MessageChat.fromDocument(document);
-      if (messageChat.idFrom == currentUserId) {
+      if (messageChat.idFrom == _chatController.currentUserId.value) {
         // Right (my message)
         return Row(
           children: <Widget>[
-            messageChat.type == TypeMessage.text
+            messageChat.type == 0
                 // Text
                 ? Container(
                     child: Row(
@@ -240,7 +183,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                     margin: EdgeInsets.only(
                         bottom: isLastMessageRight(index) ? 20 : 10, right: 10),
                   )
-                : messageChat.type == TypeMessage.image
+                : messageChat.type == 1
                     // Image
                     ? Container(
                         child: OutlinedButton(
@@ -297,14 +240,9 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                             clipBehavior: Clip.hardEdge,
                           ),
                           onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => FullPhotoPage(
+                            Get.to(() => FullPhotoPage(
                                   url: messageChat.content,
-                                ),
-                              ),
-                            );
+                                ));
                           },
                           style: ButtonStyle(
                               padding: MaterialStateProperty.all<EdgeInsets>(
@@ -371,7 +309,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                           clipBehavior: Clip.hardEdge,
                         )
                       : Container(width: 35),
-                  messageChat.type == TypeMessage.text
+                  messageChat.type == 0
                       ? Container(
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -398,7 +336,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                               borderRadius: BorderRadius.circular(8)),
                           margin: EdgeInsets.only(left: 10),
                         )
-                      : messageChat.type == TypeMessage.image
+                      : messageChat.type == 1
                           ? Container(
                               child: TextButton(
                                 child: Material(
@@ -455,13 +393,9 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                   clipBehavior: Clip.hardEdge,
                                 ),
                                 onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => FullPhotoPage(
-                                          url: messageChat.content),
-                                    ),
-                                  );
+                                  Get.to(() => FullPhotoPage(
+                                        url: messageChat.content,
+                                      ));
                                 },
                                 style: ButtonStyle(
                                     padding:
@@ -483,22 +417,6 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                             ),
                 ],
               ),
-
-              // Time
-              // isLastMessageLeft(index)
-              //     ? Container(
-              //         child: Text(
-              //           DateFormat('dd MMM kk:mm').format(
-              //               DateTime.fromMillisecondsSinceEpoch(
-              //                   int.parse(messageChat.timestamp))),
-              //           style: TextStyle(
-              //               color: ColorConstants.greyColor,
-              //               fontSize: 12,
-              //               fontStyle: FontStyle.italic),
-              //         ),
-              //         margin: EdgeInsets.only(left: 50, top: 5, bottom: 5),
-              //       )
-              //     : SizedBox.shrink()
             ],
             crossAxisAlignment: CrossAxisAlignment.start,
           ),
@@ -513,7 +431,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   bool isLastMessageLeft(int index) {
     if ((index > 0 &&
             listMessage[index - 1].get(FirestoreConstants.idFrom) ==
-                currentUserId) ||
+                _chatController.currentUserId.value) ||
         index == 0) {
       return true;
     } else {
@@ -524,7 +442,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   bool isLastMessageRight(int index) {
     if ((index > 0 &&
             listMessage[index - 1].get(FirestoreConstants.idFrom) !=
-                currentUserId) ||
+                _chatController.currentUserId.value) ||
         index == 0) {
       return true;
     } else {
@@ -533,17 +451,11 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 
   Future<bool> onBackPress() {
-    if (isShowSticker) {
-      setState(() {
-        isShowSticker = false;
-      });
+    if (_chatController.isShowSticker.value) {
+      _chatController.isShowSticker.value = false;
     } else {
-      chatProvider.updateDataFirestore(
-        FirestoreConstants.pathUserCollection,
-        currentUserId,
-        {FirestoreConstants.chattingWith: null},
-      );
-      Navigator.pop(context);
+      _chatController.clearCurrentChatUser();
+      Get.back();
     }
 
     return Future.value(false);
@@ -555,7 +467,8 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       appBar: AppBar(
         automaticallyImplyLeading: false,
         title: StreamBuilder<QuerySnapshot>(
-            stream: chatProvider.getChatStream(groupChatId, _limit),
+            stream: _chatController.getChatStream(
+                _chatController.groupChatId.value, _limit),
             builder:
                 (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
               if (snapshot.hasData) {
@@ -567,13 +480,13 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          this.widget.arguments.peerNickname,
+                          widget.arguments.peerNickname,
                           style: TextStyle(
                             color: ColorConstants.primaryColor,
                             fontSize: 15,
                           ),
                         ),
-                        Obx(() => _chatctrl.isonline.value
+                        Obx(() => _chatController.isOnline.value
                             ? Text(
                                 "online",
                                 style: TextStyle(
@@ -591,7 +504,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   return Container(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      this.widget.arguments.peerNickname,
+                      widget.arguments.peerNickname,
                       style: TextStyle(
                         color: ColorConstants.primaryColor,
                         fontSize: 15,
@@ -603,7 +516,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                 return Container(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    this.widget.arguments.peerNickname,
+                    widget.arguments.peerNickname,
                     style: TextStyle(
                       color: ColorConstants.primaryColor,
                       fontSize: 15,
@@ -625,14 +538,20 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   buildListMessage(),
 
                   // Sticker
-                  isShowSticker ? buildSticker() : SizedBox.shrink(),
+                  Obx(() => _chatController.isShowSticker.value
+                      ? buildSticker()
+                      : SizedBox.shrink()),
 
                   // Input content
                   buildInput(),
                 ],
               ),
               // Loading
-              buildLoading()
+              Obx(() => Positioned(
+                    child: _chatController.isLoading.value
+                        ? LoadingView()
+                        : SizedBox.shrink(),
+                  )),
             ],
           ),
           onWillPop: onBackPress,
@@ -649,7 +568,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             Row(
               children: <Widget>[
                 TextButton(
-                  onPressed: () => onSendMessage('mimi1', TypeMessage.sticker),
+                  onPressed: () => onSendMessage('mimi1', 2),
                   child: Image.asset(
                     'images/mimi1.gif',
                     width: 50,
@@ -658,7 +577,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   ),
                 ),
                 TextButton(
-                  onPressed: () => onSendMessage('mimi2', TypeMessage.sticker),
+                  onPressed: () => onSendMessage('mimi2', 2),
                   child: Image.asset(
                     'images/mimi2.gif',
                     width: 50,
@@ -667,7 +586,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   ),
                 ),
                 TextButton(
-                  onPressed: () => onSendMessage('mimi3', TypeMessage.sticker),
+                  onPressed: () => onSendMessage('mimi3', 2),
                   child: Image.asset(
                     'images/mimi3.gif',
                     width: 50,
@@ -681,7 +600,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             Row(
               children: <Widget>[
                 TextButton(
-                  onPressed: () => onSendMessage('mimi4', TypeMessage.sticker),
+                  onPressed: () => onSendMessage('mimi4', 2),
                   child: Image.asset(
                     'images/mimi4.gif',
                     width: 50,
@@ -690,7 +609,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   ),
                 ),
                 TextButton(
-                  onPressed: () => onSendMessage('mimi5', TypeMessage.sticker),
+                  onPressed: () => onSendMessage('mimi5', 2),
                   child: Image.asset(
                     'images/mimi5.gif',
                     width: 50,
@@ -699,7 +618,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   ),
                 ),
                 TextButton(
-                  onPressed: () => onSendMessage('mimi6', TypeMessage.sticker),
+                  onPressed: () => onSendMessage('mimi6', 2),
                   child: Image.asset(
                     'images/mimi6.gif',
                     width: 50,
@@ -713,7 +632,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
             Row(
               children: <Widget>[
                 TextButton(
-                  onPressed: () => onSendMessage('mimi7', TypeMessage.sticker),
+                  onPressed: () => onSendMessage('mimi7', 2),
                   child: Image.asset(
                     'images/mimi7.gif',
                     width: 50,
@@ -722,7 +641,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   ),
                 ),
                 TextButton(
-                  onPressed: () => onSendMessage('mimi8', TypeMessage.sticker),
+                  onPressed: () => onSendMessage('mimi8', 2),
                   child: Image.asset(
                     'images/mimi8.gif',
                     width: 50,
@@ -731,7 +650,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   ),
                 ),
                 TextButton(
-                  onPressed: () => onSendMessage('mimi9', TypeMessage.sticker),
+                  onPressed: () => onSendMessage('mimi9', 2),
                   child: Image.asset(
                     'images/mimi9.gif',
                     width: 50,
@@ -755,40 +674,10 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     );
   }
 
-  Widget buildLoading() {
-    return Positioned(
-      child: isLoading ? LoadingView() : SizedBox.shrink(),
-    );
-  }
-
   Widget buildInput() {
     return Container(
       child: Row(
         children: <Widget>[
-          // Button send image
-          // Material(
-          //   child: Container(
-          //     margin: EdgeInsets.symmetric(horizontal: 1),
-          //     child: IconButton(
-          //       icon: Icon(Icons.image),
-          //       onPressed: getImage,
-          //       color: ColorConstants.primaryColor,
-          //     ),
-          //   ),
-          //   color: Colors.white,
-          // ),
-          // Material(
-          //   child: Container(
-          //     margin: EdgeInsets.symmetric(horizontal: 1),
-          //     child: IconButton(
-          //       icon: Icon(Icons.face),
-          //       onPressed: getSticker,
-          //       color: ColorConstants.primaryColor,
-          //     ),
-          //   ),
-          //   color: Colors.white,
-          // ),
-
           // Edit text
           Expanded(
             child: SingleChildScrollView(
@@ -797,14 +686,14 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                 padding: EdgeInsets.symmetric(horizontal: 15, vertical: 10),
                 child: TextField(
                   onSubmitted: (value) {
-                    onSendMessage(textEditingController.text, TypeMessage.text);
+                    onSendMessage(textEditingController.text, 0);
                   },
                   style: TextStyle(
                       color: ColorConstants.primaryColor, fontSize: 15),
                   controller: textEditingController,
                   textInputAction: TextInputAction.newline,
                   onChanged: (_) {
-                    checkistyping();
+                    _chatController.checkIsTyping();
                   },
                   maxLines: null,
                   keyboardType: TextInputType.multiline,
@@ -826,7 +715,7 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               child: IconButton(
                 icon: Icon(Icons.send),
                 onPressed: () =>
-                    onSendMessage(textEditingController.text, TypeMessage.text),
+                    onSendMessage(textEditingController.text, 0),
                 color: ColorConstants.primaryColor,
               ),
             ),
@@ -843,50 +732,32 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     );
   }
 
-  checkistyping() async {
-    print("call---");
-    if (textEditingController.text.length > 0) {
-      print("typing");
-      istyping_local = true;
-      chatProvider.updateDataFirestoreallfiled(
-          FirestoreConstants.pathMessageCollection, groupChatId, {
-        FirestoreConstants.istyping: true,
-        FirestoreConstants.whotyping: currentUserId
-      });
-    } else if (textEditingController.text.length == 0) {
-      istyping_local = false;
-      print("not typing");
-      chatProvider.updateDataFirestoreallfiled(
-          FirestoreConstants.pathMessageCollection, groupChatId, {
-        FirestoreConstants.istyping: false,
-        FirestoreConstants.whotyping: currentUserId
-      });
-    }
-  }
-
   Widget buildListMessage() {
     return Flexible(
-      child: groupChatId.isNotEmpty
+      child: _chatController.groupChatId.value.isNotEmpty
           ? StreamBuilder<QuerySnapshot>(
-              stream: chatProvider.getChatStream(groupChatId, _limit),
+              stream: _chatController.getChatStream(
+                  _chatController.groupChatId.value, _limit),
               builder: (BuildContext context,
                   AsyncSnapshot<QuerySnapshot> snapshot) {
                 if (snapshot.hasData) {
                   listMessage = snapshot.data!.docs;
                   if (listMessage.length > 0) {
-                    _chatctrl.whoistyping.value =
+                    _chatController.whoIsTyping.value =
                         snapshot.data?.docs.first['whotyping'];
-                    _chatctrl.istyping.value =
+                    _chatController.isTyping.value =
                         snapshot.data?.docs.first['istyping'];
-                    _chatctrl.isonline.value =
+                    _chatController.isOnline.value =
                         snapshot.data?.docs.first['isonline'];
-                    _chatctrl.status.value =
+                    _chatController.status.value =
                         snapshot.data?.docs.first['status'];
-                    if (_chatctrl.whoistyping.value != currentUserId)
-                      chatProvider.updateDataFirestoreallfiled(
+                    if (_chatController.whoIsTyping.value !=
+                        _chatController.currentUserId.value)
+                      _chatController.updateDataFirestoreAllField(
                           FirestoreConstants.pathMessageCollection,
-                          groupChatId, {
-                        FirestoreConstants.status: true,
+                          _chatController.groupChatId.value,
+                          {
+                        'status': true,
                       });
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -902,9 +773,9 @@ class ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                             controller: listScrollController,
                           ),
                         ),
-                        Obx(() => _chatctrl.istyping.value == true &&
-                                _chatctrl.whoistyping.value !=
-                                    currentUserId.toString()
+                        Obx(() => _chatController.isTyping.value == true &&
+                                _chatController.whoIsTyping.value !=
+                                    _chatController.currentUserId.value
                             ? Container(
                                 padding: EdgeInsets.symmetric(
                                     horizontal: 20, vertical: 10),

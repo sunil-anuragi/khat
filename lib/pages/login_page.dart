@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_chat_demo/constants/app_constants.dart';
 import 'package:flutter_chat_demo/constants/color_constants.dart';
-import 'package:flutter_chat_demo/providers/auth_provider.dart';
+import 'package:flutter_chat_demo/controllers/auth_controller.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:provider/provider.dart';
+import 'package:get/get.dart';
 
 import '../widgets/widgets.dart';
 import 'pages.dart';
@@ -19,6 +19,7 @@ class LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authController = Get.find<AuthController>();
   bool _isLogin = true;
 
   @override
@@ -50,48 +51,55 @@ class LoginPageState extends State<LoginPage> {
 
   Future<void> _handleEmailPasswordAuth() async {
     if (_formKey.currentState!.validate()) {
-      AuthProvider authProvider = Provider.of<AuthProvider>(context, listen: false);
       bool isSuccess;
       
       if (_isLogin) {
-        isSuccess = await authProvider.handleEmailPasswordSignIn(
+        isSuccess = await _authController.handleEmailPasswordSignIn(
           _emailController.text.trim(),
           _passwordController.text,
         );
       } else {
-        isSuccess = await authProvider.handleEmailPasswordSignUp(
+        isSuccess = await _authController.handleEmailPasswordSignUp(
           _emailController.text.trim(),
           _passwordController.text,
         );
       }
 
       if (isSuccess) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => HomePage(),
-          ),
-        );
+        Get.off(() => HomePage());
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    AuthProvider authProvider = Provider.of<AuthProvider>(context);
-    switch (authProvider.status) {
-      case Status.authenticateError:
-        Fluttertoast.showToast(msg: "Authentication failed");
-        break;
-      case Status.authenticateCanceled:
-        Fluttertoast.showToast(msg: "Authentication canceled");
-        break;
-      case Status.authenticated:
-        Fluttertoast.showToast(msg: "Authentication successful");
-        break;
-      default:
-        break;
-    }
+    ever(_authController.status, (status) {
+      switch (status) {
+        case AuthStatus.authenticateError:
+          Get.snackbar(
+            'Error',
+            'Authentication failed',
+            snackPosition: SnackPosition.BOTTOM,
+          );
+          break;
+        case AuthStatus.authenticateCanceled:
+          Get.snackbar(
+            'Info',
+            'Authentication canceled',
+            snackPosition: SnackPosition.BOTTOM,
+          );
+          break;
+        case AuthStatus.authenticated:
+          Get.snackbar(
+            'Success',
+            'Authentication successful',
+            snackPosition: SnackPosition.BOTTOM,
+          );
+          break;
+        default:
+          break;
+      }
+    });
 
     return Scaffold(
       // appBar: AppBar(
@@ -101,6 +109,7 @@ class LoginPageState extends State<LoginPage> {
       //   ),
       //   centerTitle: true,
       // ),
+      
       body: Center(
         child: Stack(
           children: <Widget>[
@@ -168,19 +177,10 @@ class LoginPageState extends State<LoginPage> {
                       SizedBox(height: 24),
                       ElevatedButton.icon(
                         onPressed: () async {
-                          authProvider.handleSignIn().then((isSuccess) {
-                            if (isSuccess) {
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => HomePage(),
-                                ),
-                              );
-                            }
-                          }).catchError((error, stackTrace) {
-                            Fluttertoast.showToast(msg: error.toString());
-                            authProvider.handleException();
-                          });
+                          bool isSuccess = await _authController.handleSignIn();
+                          if (isSuccess) {
+                            Get.off(() => HomePage());
+                          }
                         },
                         icon: Icon(Icons.g_mobiledata_rounded),
                         label: Text('Sign in with Google'),
@@ -196,8 +196,16 @@ class LoginPageState extends State<LoginPage> {
                 ),
               ),
             ),
-            Positioned(
-              child: authProvider.status == Status.authenticating ? LoadingView() : SizedBox.shrink(),
+            Obx(() => _authController.isLoading.value
+              ? Positioned.fill(
+                  child: Container(
+                    color: Colors.black.withOpacity(0.3),
+                    child: Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+                )
+              : SizedBox.shrink(),
             ),
           ],
         ),
