@@ -116,4 +116,102 @@ class AuthProvider extends ChangeNotifier {
     await googleSignIn.disconnect();
     await googleSignIn.signOut();
   }
+
+  Future<bool> handleEmailPasswordSignIn(String email, String password) async {
+    try {
+      _status = Status.authenticating;
+      notifyListeners();
+
+      UserCredential userCredential = await firebaseAuth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      User? firebaseUser = userCredential.user;
+      if (firebaseUser != null) {
+        final QuerySnapshot result = await firebaseFirestore
+            .collection(FirestoreConstants.pathUserCollection)
+            .where(FirestoreConstants.id, isEqualTo: firebaseUser.uid)
+            .get();
+        final List<DocumentSnapshot> documents = result.docs;
+        
+        if (documents.length == 0) {
+          // Writing data to server because here is a new user
+          firebaseFirestore.collection(FirestoreConstants.pathUserCollection).doc(firebaseUser.uid).set({
+            FirestoreConstants.nickname: firebaseUser.displayName ?? email.split('@')[0],
+            FirestoreConstants.photoUrl: firebaseUser.photoURL,
+            FirestoreConstants.id: firebaseUser.uid,
+            'createdAt': DateTime.now().millisecondsSinceEpoch.toString(),
+            FirestoreConstants.chattingWith: null
+          });
+
+          // Write data to local storage
+          await prefs.setString(FirestoreConstants.id, firebaseUser.uid);
+          await prefs.setString(FirestoreConstants.nickname, firebaseUser.displayName ?? email.split('@')[0]);
+          await prefs.setString(FirestoreConstants.photoUrl, firebaseUser.photoURL ?? "");
+        } else {
+          // Already sign up, just get data from firestore
+          DocumentSnapshot documentSnapshot = documents[0];
+          UserChat userChat = UserChat.fromDocument(documentSnapshot);
+          // Write data to local
+          await prefs.setString(FirestoreConstants.id, userChat.id);
+          await prefs.setString(FirestoreConstants.nickname, userChat.nickname);
+          await prefs.setString(FirestoreConstants.photoUrl, userChat.photoUrl);
+          await prefs.setString(FirestoreConstants.aboutMe, userChat.aboutMe);
+        }
+        _status = Status.authenticated;
+        notifyListeners();
+        return true;
+      } else {
+        _status = Status.authenticateError;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      _status = Status.authenticateError;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> handleEmailPasswordSignUp(String email, String password) async {
+    try {
+      _status = Status.authenticating;
+      notifyListeners();
+
+      UserCredential userCredential = await firebaseAuth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      User? firebaseUser = userCredential.user;
+      if (firebaseUser != null) {
+        // Writing data to server for new user
+        firebaseFirestore.collection(FirestoreConstants.pathUserCollection).doc(firebaseUser.uid).set({
+          FirestoreConstants.nickname: email.split('@')[0],
+          FirestoreConstants.photoUrl: firebaseUser.photoURL,
+          FirestoreConstants.id: firebaseUser.uid,
+          'createdAt': DateTime.now().millisecondsSinceEpoch.toString(),
+          FirestoreConstants.chattingWith: null
+        });
+
+        // Write data to local storage
+        await prefs.setString(FirestoreConstants.id, firebaseUser.uid);
+        await prefs.setString(FirestoreConstants.nickname, email.split('@')[0]);
+        await prefs.setString(FirestoreConstants.photoUrl, firebaseUser.photoURL ?? "");
+
+        _status = Status.authenticated;
+        notifyListeners();
+        return true;
+      } else {
+        _status = Status.authenticateError;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      _status = Status.authenticateError;
+      notifyListeners();
+      return false;
+    }
+  }
 }
