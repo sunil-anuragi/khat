@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_chat_demo/constants/color_constants.dart';
 import 'package:flutter_chat_demo/controllers/auth_controller.dart';
 import 'package:get/get.dart';
-
 import 'pages.dart';
 
 class SplashPage extends StatefulWidget {
@@ -19,7 +18,6 @@ class SplashPageState extends State<SplashPage> {
   void initState() {
     super.initState();
     Future.delayed(Duration(seconds: 1), () {
-      // just delay for showing this slash page clearer because it too fast
       checkSignedIn();
     });
   }
@@ -49,7 +47,8 @@ class SplashPageState extends State<SplashPage> {
             Container(
               width: 20,
               height: 20,
-              child: CircularProgressIndicator(color: ColorConstants.themeColor),
+              child:
+                  CircularProgressIndicator(color: ColorConstants.themeColor),
             ),
           ],
         ),

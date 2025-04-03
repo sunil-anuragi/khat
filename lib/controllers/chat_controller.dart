@@ -93,6 +93,14 @@ class ChatController extends GetxController with WidgetsBindingObserver {
   Future<void> sendPendingMessages() async {
     for (var message in pendingMessages) {
       try {
+        final userDoc = await _firestore
+            .collection(FirestoreConstants.pathUserCollection)
+            .doc(peerId.value)
+            .get();
+
+        final isReceiverInChat =
+            userDoc.data()?[FirestoreConstants.chattingWith] ==
+                currentUserId.value;
         await _firestore
             .collection(FirestoreConstants.pathMessageCollection)
             .doc(groupChatId.value)
@@ -110,6 +118,9 @@ class ChatController extends GetxController with WidgetsBindingObserver {
             'lastMessageRead': message['isRead'],
           },
         );
+        if (!isReceiverInChat) {
+          sendNotificationToUser(message['content']);
+        }
       } catch (e) {
         print('Error sending pending message: $e');
       }
@@ -325,7 +336,7 @@ class ChatController extends GetxController with WidgetsBindingObserver {
               'lastMessageRead': isReceiverOnline,
             },
           );
-          print("dssadsd"+ isReceiverInChat.toString());
+          print("dssadsd" + isReceiverInChat.toString());
           // Only send notification if receiver is not in chat screen
           if (!isReceiverInChat) {
             sendNotificationToUser(content);
@@ -431,7 +442,6 @@ class ChatController extends GetxController with WidgetsBindingObserver {
   //       final isReceiverInChat =
   //           userDoc.data()?[FirestoreConstants.chattingWith] ==
   //               currentUserId.value;
-      
 
   //   messageStream.value = _firestore
   //       .collection(FirestoreConstants.pathMessageCollection)

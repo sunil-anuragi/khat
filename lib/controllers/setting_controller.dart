@@ -10,7 +10,6 @@ class SettingController extends GetxController {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final SharedPreferences _prefs = Get.find<SharedPreferences>();
-
   final RxBool isLoading = false.obs;
   final RxString id = ''.obs;
   final RxString nickname = ''.obs;

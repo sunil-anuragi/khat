@@ -7,12 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 class HomeController extends GetxController {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final SharedPreferences _prefs = Get.find<SharedPreferences>();
-
   final RxList<UserChat> users = <UserChat>[].obs;
   final RxBool isLoading = false.obs;
   final RxString searchQuery = ''.obs;
-
- 
 
   @override
   void onInit() {
@@ -41,16 +38,20 @@ class HomeController extends GetxController {
     }
   }
 
-  Stream<QuerySnapshot> getStreamFireStore(String pathCollection, int limit, String textSearch) {
-    if (textSearch.isNotEmpty) {
+  Stream<QuerySnapshot> getStreamFireStore(String pathCollection, int limit, String searchQuery) {
+    if (searchQuery.isEmpty) {
       return _firestore
           .collection(pathCollection)
           .limit(limit)
-          .where(FirestoreConstants.nickname, isEqualTo: textSearch)
           .snapshots();
-    } else {
-      return _firestore.collection(pathCollection).limit(limit).snapshots();
     }
+
+    return _firestore
+        .collection(pathCollection)
+        .where('nickname', isGreaterThanOrEqualTo: searchQuery)
+        .where('nickname', isLessThanOrEqualTo: searchQuery + '\uf8ff')
+        .limit(limit)
+        .snapshots();
   }
 
   Future<void> loadUsers() async {
