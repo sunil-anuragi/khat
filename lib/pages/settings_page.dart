@@ -1,14 +1,12 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_chat_demo/constants/constants.dart';
 import 'package:flutter_chat_demo/controllers/setting_controller.dart';
-import 'package:flutter_chat_demo/models/models.dart';
 import 'package:flutter_chat_demo/widgets/loading_view.dart';
 import 'package:get/get.dart';
-import 'package:image_picker/image_picker.dart';
+
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
